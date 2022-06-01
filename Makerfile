@@ -1,0 +1,8 @@
+build:
+	docker build -t donks/forecaster . -m 4g
+
+publish-docker:
+	docker push donks/forecaster
+
+run:
+	docker run --rm -p 4000:80 donks/forecaster
