@@ -1,7 +1,7 @@
 from flask import Flask, request
 from prophet import __version__
 from _prophet import forecast
-from _maria import getData
+from _maria import getData, pushData
 
 app = Flask(__name__)
 
@@ -22,10 +22,7 @@ def getFromDB():
 @app.route("/pushToDB", methods=['POST'])
 def pushToDB():
     params = request.get_json(silent=True)
-    if params.get('getType') == 'F':
-        result = getF(params)
-    else:
-        result = getA(params)
+    result = pushData(params)
     return result
 
 

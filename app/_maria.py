@@ -32,5 +32,25 @@ def getData(params):
     return json.dumps(result, default=str)
 
 
-def getA(params):
+def pushData(params):
+    my_Conn = returnConnection()
+    cur = my_Conn.cursor()
 
+    records = []
+    counter = 0
+    insert_query = "INSERT INTO sca (asat, loc, j, act) VALUES (%s, %s, %s, %s) "
+    for entry in params.get('data'):
+        dte = entry['dte']
+        locid = entry['locid']
+        j = entry['j']
+        act = entry['act']
+        recordEntry = (dte, locid, j, act)
+        records.append(recordEntry)
+        counter = counter + 1
+        if counter == 999:
+            cur.executemany(insert_query, records)
+            counter = 0
+
+    my_Conn.commit()
+    print("Done")
+    #return json.dumps(result, default=str)
