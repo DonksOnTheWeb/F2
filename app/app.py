@@ -5,7 +5,6 @@ from _prophet import forecast
 app = Flask(__name__)
 
 
-
 @app.route("/")
 def root():
     html = "Welcome"
@@ -15,8 +14,9 @@ def root():
 @app.route("/getFromDB", methods=['POST'])
 def getFromDB():
     params = request.get_json(silent=True)
-    result = getFromDB(params)
+    result = getData(params)
     return result.to_json(orient='split')
+
 
 @app.route("/forecast", methods=['POST'])
 def makeForecast():
