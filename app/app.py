@@ -1,6 +1,7 @@
 from flask import Flask, request
 from prophet import __version__
 from _prophet import forecast
+from _maria import getData
 
 app = Flask(__name__)
 
@@ -15,7 +16,7 @@ def root():
 def getFromDB():
     params = request.get_json(silent=True)
     result = getData(params)
-    return result.to_json(orient='split')
+    return result
 
 
 @app.route("/forecast", methods=['POST'])
