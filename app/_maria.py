@@ -21,12 +21,9 @@ def getData(params):
     j = params.get('j')
     my_Conn = returnConnection()
     cur = my_Conn.cursor()
-
     statement = "SELECT * from scdata where asat = (select max(asat) from scdata where j = %s)"
     jurisdiction = (j,)
-
     cur.execute(statement, jurisdiction)
-
     result = cur.fetchall()
 
     return json.dumps(result, default=str)
