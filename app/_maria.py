@@ -54,3 +54,4 @@ def pushData(params):
     my_Conn.commit()
     print("Done")
     #return json.dumps(result, default=str)
+
