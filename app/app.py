@@ -19,6 +19,16 @@ def getFromDB():
     return result
 
 
+@app.route("/pushToDB", methods=['POST'])
+def pushToDB():
+    params = request.get_json(silent=True)
+    if params.get('getType') == 'F':
+        result = getF(params)
+    else:
+        result = getA(params)
+    return result
+
+
 @app.route("/forecast", methods=['POST'])
 def makeForecast():
     params = request.get_json(silent=True)

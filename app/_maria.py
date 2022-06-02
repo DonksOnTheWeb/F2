@@ -19,11 +19,18 @@ def returnConnection():
 
 def getData(params):
     j = params.get('j')
+    t = params.get('t')
     my_Conn = returnConnection()
     cur = my_Conn.cursor()
-    statement = "SELECT * from scdata where asat = (select max(asat) from scdata where j = %s)"
-    jurisdiction = (j,)
+    statement = "SELECT * from sca where j = %s)"
+    if t.upper() == 'F':
+        statement = "SELECT * from scf where asat = (select max(asat) from scf where j = %s)"
+    jurisdiction = (j.upper(),)
     cur.execute(statement, jurisdiction)
     result = cur.fetchall()
 
     return json.dumps(result, default=str)
+
+
+def getA(params):
+
