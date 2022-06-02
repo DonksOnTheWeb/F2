@@ -1,7 +1,7 @@
 from flask import Flask, request
 from prophet import __version__
 from _prophet import forecast
-from _maria import getData, pushData
+from _maria import getData, pushData, latestActual
 
 app = Flask(__name__)
 
@@ -23,6 +23,12 @@ def getFromDB():
 def pushToDB():
     params = request.get_json(silent=True)
     result = pushData(params)
+    return result
+
+
+@app.route("/latest", methods=['POST'])
+def getLatest():
+    result = latestActual()
     return result
 
 

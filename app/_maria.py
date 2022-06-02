@@ -32,6 +32,16 @@ def getData(params):
     return json.dumps(result, default=str)
 
 
+def latestActual(params):
+    my_Conn = returnConnection()
+    cur = my_Conn.cursor()
+    statement = "SELECT max(asat),j from sca"
+    cur.execute(statement)
+    result = cur.fetchall()
+
+    return json.dumps(result, default=str)
+
+
 def pushData(params):
     my_Conn = returnConnection()
     cur = my_Conn.cursor()
@@ -50,6 +60,7 @@ def pushData(params):
         if counter == 999:
             cur.executemany(insert_query, records)
             counter = 0
+            records = []
 
     my_Conn.commit()
     print("Done")
