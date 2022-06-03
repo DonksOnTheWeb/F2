@@ -3,6 +3,7 @@ from google.oauth2 import service_account
 import datetime
 import json
 from _maria import loadActuals
+from os.path import exists
 
 
 def readFrom(sheetName):
@@ -26,25 +27,39 @@ def readFrom(sheetName):
 
 
 def checkDaily(ctry):
-    f = open('working/latest.json')
-    data = json.load(f)
+
     date_format = "%Y-%m-%d"
-    lastEntry = datetime.datetime.strptime("2000-01-01", date_format)
+    lastEntry = "2000-01-01"
     newEntries = []
-    if ctry in data:
-        ctryData = data[ctry]
-        lastEntry = ctryData["LastEntry"]
 
-    gData = readFrom(ctry)
-    for entry in gData:
-        dte = datetime.datetime.strptime(entry[1], date_format)
-        delta = dte - lastEntry
-        if delta.days > 0:
-            record = (entry[0], entry[1], entry[2], entry[3])
-            newEntries.append(record)
+    if exists('../working/latest.json'):
+        f = open('../working/latest.json')
+        data = json.load(f)
+        if ctry in data:
+            lastEntry = data[ctry]
 
-    loaded = loadActuals(newEntries)
-    print("Loaded " + loaded + " records for " + ctry)
+    lastEntry = datetime.datetime.strptime(lastEntry, date_format).date()
+    today = datetime.date.today()
+    delta = today - lastEntry
+    if delta.days <= 1:
+        print("No new records found for " + ctry)
+        loaded = -1
+    else:
+        gData = readFrom(ctry)
+        for entry in gData:
+            dte = datetime.datetime.strptime(entry[1], date_format).date()
+            delta = dte - lastEntry
+            if delta.days > 0:
+                record = (entry[0], entry[1], entry[2], entry[3])
+                newEntries.append(record)
+
+            data[ctry] = lastEntry
+
+        loaded = loadActuals(newEntries)
+        print("Loaded " + loaded + " records for " + ctry)
+
+        with open('../working/latest.json', 'w') as outfile:
+            json.dump(data, outfile)
     return loaded
 
 
