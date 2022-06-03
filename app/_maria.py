@@ -3,7 +3,7 @@ import json
 
 
 def returnConnection():
-    f = open('creds/data.json')
+    f = open('creds/db.json')
     data = json.load(f)
 
     try:
