@@ -7,7 +7,7 @@ from os.path import exists
 
 
 def readFrom(sheetName):
-    SERVICE_ACCOUNT_FILE = 'creds/keys.json'
+    SERVICE_ACCOUNT_FILE = 'keys.json'
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 
     creds = None
@@ -29,16 +29,16 @@ def readFrom(sheetName):
 def checkDaily(ctry):
 
     date_format = "%Y-%m-%d"
-    lastEntry = "2000-01-01"
+    final = "2000-01-01"
     newEntries = []
-
-    if exists('../working/latest.json'):
-        f = open('../working/latest.json')
+    data = {}
+    if exists('latest.json'):
+        f = open('latest.json')
         data = json.load(f)
         if ctry in data:
-            lastEntry = data[ctry]
+            final = data[ctry]
 
-    lastEntry = datetime.datetime.strptime(lastEntry, date_format).date()
+    lastEntry = datetime.datetime.strptime(final, date_format).date()
     today = datetime.date.today()
     delta = today - lastEntry
     if delta.days <= 1:
@@ -46,19 +46,22 @@ def checkDaily(ctry):
         loaded = -1
     else:
         gData = readFrom(ctry)
+        gData = gData[1:]
         for entry in gData:
             dte = datetime.datetime.strptime(entry[1], date_format).date()
             delta = dte - lastEntry
             if delta.days > 0:
-                record = (entry[0], entry[1], entry[2], entry[3])
+                record = (entry[1], entry[0], ctry[0], int(entry[2].replace(',', '')))
                 newEntries.append(record)
+                final = entry[1]
 
-            data[ctry] = lastEntry
+        data[ctry] = final
 
         loaded = loadActuals(newEntries)
-        print("Loaded " + loaded + " records for " + ctry)
+        print("Loaded " + str(loaded) + " records for " + ctry)
+        print(data)
 
-        with open('../working/latest.json', 'w') as outfile:
+        with open('latest.json', 'w') as outfile:
             json.dump(data, outfile)
     return loaded
 

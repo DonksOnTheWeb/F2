@@ -3,7 +3,7 @@ import json
 
 
 def returnConnection():
-    f = open('creds/db.json')
+    f = open('db.json')
     data = json.load(f)
 
     try:
@@ -55,7 +55,7 @@ def pushData(params):
 
     records = []
     counter = 0
-    insert_query = "INSERT INTO sca (asat, loc, j, act) VALUES (%s, %s, %s, %s) "
+    insert_query = "INSERT INTO sca (Asat, L, J, Act) VALUES (%s, %s, %s, %s) "
     for entry in params.get('data'):
         dte = entry['dte']
         locid = entry['locid']
@@ -84,7 +84,7 @@ def loadActuals(newEntries):
     records = []
     counter = 0
     total = 0
-    insert_query = "INSERT INTO sca (asat, loc, j, act) VALUES (%s, %s, %s, %s) "
+    insert_query = "INSERT INTO sca (Asat, L, J, Act) VALUES (%s, %s, %s, %s) "
     for entry in newEntries:
         dte = entry[0]
         locid = entry[1]
