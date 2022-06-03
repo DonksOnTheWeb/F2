@@ -2,6 +2,7 @@ from flask import Flask, request
 from prophet import __version__
 from _prophet import forecast
 from _maria import getData, pushData, latestActual
+from _googlePull import gSyncActuals
 
 app = Flask(__name__)
 
@@ -23,6 +24,13 @@ def getFromDB():
 def pushToDB():
     params = request.get_json(silent=True)
     result = pushData(params)
+    return "Success"
+
+
+@app.route("/syncActuals", methods=['POST'])  #VALID
+def syncActuals():
+    countries = ['UK', 'FR', 'ES']
+    gSyncActuals(countries)
     return "Success"
 
 
