@@ -27,7 +27,7 @@ def pushToDB():
     return "Success"
 
 
-@app.route("/syncActuals", methods=['POST'])  #VALID
+@app.route("/syncActuals", methods=['GET'])  #VALID
 def syncActuals():
     countries = ['UK', 'FR', 'ES']
     gSyncActuals(countries)

@@ -20,6 +20,9 @@ RUN pip3 install --upgrade --no-cache-dir google-api-python-client
 
 COPY gunicorn_config.py /deploy/gunicorn_config.py
 COPY ./app /deploy/app
+COPY ./creds /deploy/creds
+COPY ./working /deploy/working
+
 WORKDIR /deploy/app
 
 EXPOSE 5000
