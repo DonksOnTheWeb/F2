@@ -14,6 +14,9 @@ RUN pip3 install --upgrade --no-cache-dir prophet
 RUN pip3 install --upgrade --no-cache-dir Flask
 RUN pip3 install --upgrade --no-cache-dir gunicorn
 RUN pip3 install --upgrade --no-cache-dir mariadb
+RUN pip3 install --upgrade --no-cache-dir google-api-python-client
+RUN pip3 install --upgrade --no-cache-dir google-auth-httplib2
+RUN pip3 install --upgrade --no-cache-dir google-auth-oauthlib
 
 COPY gunicorn_config.py /deploy/gunicorn_config.py
 COPY ./app /deploy/app

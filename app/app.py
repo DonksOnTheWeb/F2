@@ -23,12 +23,13 @@ def getFromDB():
 def pushToDB():
     params = request.get_json(silent=True)
     result = pushData(params)
-    return result
+    return "Success"
 
 
 @app.route("/latest", methods=['POST'])
 def getLatest():
-    result = latestActual()
+    params = request.get_json(silent=True)
+    result = latestActual(params)
     return result
 
 
