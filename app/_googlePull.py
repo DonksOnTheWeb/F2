@@ -2,11 +2,12 @@ from googleapiclient.discovery import build
 from google.oauth2 import service_account
 import datetime
 import json
-from _maria import loadActuals
-from os.path import exists
+
+from _maria import loadActuals, latestActual
+from _tsLog import log
 
 
-def readFrom(sheetName):
+def readFrom(sheetname):
     SERVICE_ACCOUNT_FILE = 'keys.json'
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 
@@ -20,7 +21,7 @@ def readFrom(sheetName):
 
     # Call the Sheets API
     sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=sheetName + "!A:C").execute()
+    result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=sheetname + "!A:C").execute()
     values = result.get('values', [])
 
     return values
@@ -28,45 +29,58 @@ def readFrom(sheetName):
 
 def checkDaily(ctry):
 
+    ctrySingle = ctry[0]
     date_format = "%Y-%m-%d"
     final = "2000-01-01"
-    newEntries = []
-    data = {}
-    if exists('latest.json'):
-        f = open('latest.json')
-        data = json.load(f)
-        if ctry in data:
-            final = data[ctry]
+    result = latestActual()
+    result = json.loads(result)
+    for entry in result:
+        if entry["j"] == ctrySingle:
+            final = entry["latest"]
 
     lastEntry = datetime.datetime.strptime(final, date_format).date()
-    today = datetime.date.today()
-    delta = today - lastEntry
-    if delta.days <= 1:
-        print("No new records found for " + ctry)
-        loaded = -1
+    yesterday = datetime.date.today() - datetime.timedelta(days=1)
+    delta = yesterday - lastEntry
+    newEntries = []
+    haveLoaded = False
+
+    if delta.days == 0:
+        finalStr = "Latest entries for " + ctry + " are yesterday.  Not performing a load."
     else:
+        log("Last data found as at " + final + ".  Therefore missing " + str(delta.days) + " days of Data.")
         gData = readFrom(ctry)
         gData = gData[1:]
+        unique_dates = {}
+
         for entry in gData:
             dte = datetime.datetime.strptime(entry[1], date_format).date()
             delta = dte - lastEntry
-            if delta.days > 0:
+            if delta.days >= 0:
+                if entry[1] not in unique_dates:
+                    unique_mfcs = []
+                else:
+                    unique_mfcs = unique_dates[entry[1]]
+
+                if entry[0] not in unique_dates:
+                    unique_mfcs.append(entry[0])
+
+                unique_dates[entry[1]] = unique_mfcs
+
                 record = (entry[1], entry[0], ctry[0], int(entry[2].replace(',', '')))
                 newEntries.append(record)
-                final = entry[1]
+                haveLoaded = True
 
-        data[ctry] = final
+        log("Loaded data for :")
+        log(json.dumps(unique_dates, indent=4))
 
-        loaded = loadActuals(newEntries)
-        print("Loaded " + str(loaded) + " records for " + ctry)
-        print(data)
+    loaded = loadActuals(newEntries)
+    if haveLoaded:
+        finalStr = "Loaded " + str(loaded) + " records for " + ctry + ".  This includes re-loading last data date."
 
-        with open('latest.json', 'w') as outfile:
-            json.dump(data, outfile)
+    log(finalStr)
     return loaded
 
 
 def gSyncActuals(countries):
     for ctry in countries:
         checkDaily(ctry)
-

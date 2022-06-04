@@ -17,6 +17,7 @@ RUN pip3 install --upgrade --no-cache-dir mariadb
 RUN pip3 install --upgrade --no-cache-dir google-auth-httplib2
 RUN pip3 install --upgrade --no-cache-dir google-auth-oauthlib
 RUN pip3 install --upgrade --no-cache-dir google-api-python-client
+RUN pip3 install --upgrade --no-cache-dir pytz
 
 COPY gunicorn_config.py /deploy/gunicorn_config.py
 COPY ./app /deploy/app

@@ -2,7 +2,7 @@ from flask import Flask, request
 from prophet import __version__
 from _prophet import forecast
 from _maria import getData, pushData, latestActual
-from _googlePull import gSyncActuals
+from _googlePull import gSyncActuals, checkDaily
 
 app = Flask(__name__)
 
@@ -20,25 +20,11 @@ def getFromDB():
     return result
 
 
-@app.route("/pushToDB", methods=['POST'])
-def pushToDB():
-    params = request.get_json(silent=True)
-    result = pushData(params)
-    return "Success"
-
-
-@app.route("/syncActuals", methods=['GET'])  #VALID
-def syncActuals():
+@app.route("/getActuals", methods=['GET'])
+def getActuals():
     countries = ['UK', 'FR', 'ES']
     gSyncActuals(countries)
     return "Success"
-
-
-@app.route("/latest", methods=['POST'])
-def getLatest():
-    params = request.get_json(silent=True)
-    result = latestActual(params)
-    return result
 
 
 @app.route("/forecast", methods=['POST'])
@@ -56,3 +42,4 @@ def version():
 
 if __name__ == "__main__":
     app.run()
+

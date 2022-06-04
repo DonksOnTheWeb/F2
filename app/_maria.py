@@ -20,7 +20,7 @@ def returnConnection():
     return conn
 
 
-def getData(params):
+def getForecastData(params):
     j = params.get('j')
     t = params.get('t')
     my_Conn = returnConnection()
@@ -37,10 +37,10 @@ def getData(params):
     return json.dumps(result, default=str)
 
 
-def latestActual(params):
+def latestActual():
     my_Conn = returnConnection()
     cur = my_Conn.cursor(dictionary=True)
-    statement = "SELECT max(asat),j from sca group by j"
+    statement = "SELECT max(asat) as latest, j from sca group by j"
     cur.execute(statement)
     result = cur.fetchall()
 
@@ -84,7 +84,7 @@ def loadActuals(newEntries):
     records = []
     counter = 0
     total = 0
-    insert_query = "INSERT INTO sca (Asat, L, J, Act) VALUES (%s, %s, %s, %s) "
+    insert_query = "INSERT IGNORE INTO sca (Asat, L, J, Act) VALUES (%s, %s, %s, %s)"
     for entry in newEntries:
         dte = entry[0]
         locid = entry[1]
