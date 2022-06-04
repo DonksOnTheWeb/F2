@@ -21,20 +21,17 @@ def returnConnection():
     return retVal
 
 
-def getForecastData(params):
-    j = params.get('j')
-    t = params.get('t')
+def getForecastData():
+    # j = params.get('j')
+    # t = params.get('t')
     retVal = {}
     try_Conn = returnConnection()
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "SELECT * from sca where j = %s"
-        if t.upper() == 'F':
-            statement = "SELECT * from scf where asat = (select max(asat) from scf where j = %s)"
-        jurisdiction = (j.upper(),)
+        statement = "SELECT * from scf"
         try:
-            cur.execute(statement, jurisdiction)
+            cur.execute(statement)
             result = cur.fetchall()
             my_Conn.close()
             retVal["Result"] = 1
@@ -140,5 +137,3 @@ def loadActuals(new_entries):
         retVal["Result"] = 0
         retVal["Data"] = try_Conn[1]
         return retVal
-
-

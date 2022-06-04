@@ -2,8 +2,9 @@ from googleapiclient.discovery import build
 from google.oauth2 import service_account
 import datetime
 import json
+from hashlib import sha256
 
-from _maria import loadActuals, latestActualDate
+from _maria import loadActuals, latestActualDate, getLatestActuals
 from _tsLog import log
 
 
@@ -33,6 +34,7 @@ def checkDaily(ctry):
     date_format = "%Y-%m-%d"
     final = "2000-01-01"
     result = latestActualDate()
+
     if result["Result"] == 1:
         data = json.loads(result["Data"])
         for entry in data:
@@ -67,7 +69,9 @@ def checkDaily(ctry):
 
                     unique_dates[entry[1]] = unique_mfcs
 
-                    record = (entry[1], entry[0], ctry[0], int(entry[2].replace(',', '')))
+                    MFC = sha256(entry[0].encode('utf-8')).hexdigest()
+
+                    record = (entry[1], MFC, ctry[0], int(entry[2].replace(',', '')))
                     newEntries.append(record)
                     haveLoaded = True
 
@@ -98,10 +102,16 @@ def gSyncActuals(countries):
         localReturn = checkDaily(ctry)
         if localReturn["Result"] == 1:
             retVal["Result"] = 1
-            retVal["Data"] = {}
-            retVal["Data"][ctry] = localReturn["Data"]
         else:
             retVal["Result"] = 0
             retVal["Data"] = localReturn["Data"]
             break
+
+    if retVal["Result"] == 1:
+        data = getLatestActuals(None)
+        if data["Result"] == 0:
+            retVal["Result"] = 0
+
+        retVal["Data"] = data["Data"]
+
     return retVal
