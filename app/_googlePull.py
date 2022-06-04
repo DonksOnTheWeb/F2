@@ -76,7 +76,8 @@ def checkDaily(ctry):
 
         loaded = loadActuals(newEntries)
         if haveLoaded:
-            finalStr = "Loaded " + str(loaded) + " records for " + ctry + ".  This includes re-loading last data date."
+            finalStr = "Loaded " + str(loaded["Data"]) + " records for " + ctry
+            finalStr = finalStr + ".  This includes re-loading last data date."
 
         log(finalStr)
         retVal["Result"] = 1
