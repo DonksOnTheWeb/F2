@@ -14,94 +14,131 @@ def returnConnection():
             port=data["port"],
             database=data["database"]
         )
-    except mariadb.Error:
-        conn = None
+        retVal = (1, conn)
+    except mariadb.Error as e:
+        retVal = (0, str(e))
 
-    return conn
+    return retVal
 
 
 def getForecastData(params):
     j = params.get('j')
     t = params.get('t')
-    my_Conn = returnConnection()
-    cur = my_Conn.cursor(dictionary=True)
-    statement = "SELECT * from sca where j = %s"
-    if t.upper() == 'F':
-        statement = "SELECT * from scf where asat = (select max(asat) from scf where j = %s)"
-    jurisdiction = (j.upper(),)
-    cur.execute(statement, jurisdiction)
-    result = cur.fetchall()
-
-    my_Conn.close()
-
-    return json.dumps(result, default=str)
-
-
-def latestActual():
-    my_Conn = returnConnection()
-    cur = my_Conn.cursor(dictionary=True)
-    statement = "SELECT max(asat) as latest, j from sca group by j"
-    cur.execute(statement)
-    result = cur.fetchall()
-
-    my_Conn.close()
-
-    return json.dumps(result, default=str)
-
-
-def pushData(params):
-    my_Conn = returnConnection()
-    cur = my_Conn.cursor()
-
-    records = []
-    counter = 0
-    insert_query = "INSERT INTO sca (Asat, L, J, Act) VALUES (%s, %s, %s, %s) "
-    for entry in params.get('data'):
-        dte = entry['dte']
-        locid = entry['locid']
-        j = entry['j']
-        act = entry['act']
-        recordEntry = (dte, locid, j, act)
-        records.append(recordEntry)
-        counter = counter + 1
-        if counter == 999:
-            cur.executemany(insert_query, records)
-            counter = 0
-            records = []
-
-    if counter > 0:
-        cur.executemany(insert_query, records)
-
-    my_Conn.commit()
-    my_Conn.close()
-    # return json.dumps(result, default=str)
+    retVal = {}
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        statement = "SELECT * from sca where j = %s"
+        if t.upper() == 'F':
+            statement = "SELECT * from scf where asat = (select max(asat) from scf where j = %s)"
+        jurisdiction = (j.upper(),)
+        try:
+            cur.execute(statement, jurisdiction)
+            result = cur.fetchall()
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = json.dumps(result, default=str)
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal
 
 
-def loadActuals(newEntries):
-    my_Conn = returnConnection()
-    cur = my_Conn.cursor()
+def latestActualDate():
+    retVal = {}
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        statement = "SELECT max(asat) as latest, j from sca group by j"
+        try:
+            cur.execute(statement)
+            result = cur.fetchall()
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = json.dumps(result, default=str)
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal
 
+
+def getLatestActuals(from_date):
+    retVal = {}
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        statement = "SELECT * from sca"
+        try:
+            if from_date is not None:
+                statement = statement + " where Asat >= %s"
+                AsatDate = (from_date,)
+                cur.execute(statement, AsatDate)
+            else:
+                cur.execute(statement)
+            result = cur.fetchall()
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = json.dumps(result, default=str)
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal
+
+
+def loadActuals(new_entries):
+    retVal = {}
     records = []
     counter = 0
     total = 0
-    insert_query = "INSERT IGNORE INTO sca (Asat, L, J, Act) VALUES (%s, %s, %s, %s)"
-    for entry in newEntries:
-        dte = entry[0]
-        locid = entry[1]
-        j = entry[2]
-        act = int(entry[3])
-        recordEntry = (dte, locid, j, act)
-        records.append(recordEntry)
-        counter = counter + 1
-        total = total + 1
-        if counter == 999:
-            cur.executemany(insert_query, records)
-            counter = 0
-            records = []
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor()
+        insert_query = "INSERT IGNORE INTO sca (Asat, L, J, Act) VALUES (%s, %s, %s, %s)"
+        try:
+            for entry in new_entries:
+                dte = entry[0]
+                locid = entry[1]
+                j = entry[2]
+                act = int(entry[3])
+                recordEntry = (dte, locid, j, act)
+                records.append(recordEntry)
+                counter = counter + 1
+                total = total + 1
+                if counter == 999:
+                    cur.executemany(insert_query, records)
+                    counter = 0
+                    records = []
 
-    if counter > 0:
-        cur.executemany(insert_query, records)
+            if counter > 0:
+                cur.executemany(insert_query, records)
 
-    my_Conn.commit()
-    my_Conn.close()
-    return total
+            my_Conn.commit()
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = total
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal
+
+

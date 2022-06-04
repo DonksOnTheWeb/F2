@@ -1,8 +1,9 @@
 from flask import Flask, request
 from prophet import __version__
 from _prophet import forecast
-from _maria import getData, pushData, latestActual
-from _googlePull import gSyncActuals, checkDaily
+from _maria import getForecastData
+from _googlePull import gSyncActuals
+import json
 
 app = Flask(__name__)
 
@@ -13,18 +14,27 @@ def root():
     return html.format(version=__version__)
 
 
-@app.route("/getFromDB", methods=['POST'])
-def getFromDB():
+@app.route("/version")
+def version():
+    return __version__
+
+
+@app.route("/getForecastFromDB", methods=['POST'])
+def getForecastFromDB():
     params = request.get_json(silent=True)
-    result = getData(params)
+    result = getForecastData(params)
     return result
 
 
-@app.route("/getActuals", methods=['GET'])
-def getActuals():
+@app.route("/syncActuals", methods=['GET'])
+def syncActuals():
     countries = ['UK', 'FR', 'ES']
-    gSyncActuals(countries)
-    return "Success"
+    result = gSyncActuals(countries)
+    if result["Result"] == 1:
+        return "Success"
+    else:
+        return "Fail - check logs"
+
 
 
 @app.route("/forecast", methods=['POST'])
@@ -35,9 +45,6 @@ def makeForecast():
     return cut_Down.to_json(orient='split')
 
 
-@app.route("/version")
-def version():
-    return __version__
 
 
 if __name__ == "__main__":

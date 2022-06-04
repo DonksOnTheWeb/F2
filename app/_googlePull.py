@@ -3,7 +3,7 @@ from google.oauth2 import service_account
 import datetime
 import json
 
-from _maria import loadActuals, latestActual
+from _maria import loadActuals, latestActualDate
 from _tsLog import log
 
 
@@ -28,59 +28,79 @@ def readFrom(sheetname):
 
 
 def checkDaily(ctry):
-
+    retVal = {}
     ctrySingle = ctry[0]
     date_format = "%Y-%m-%d"
     final = "2000-01-01"
-    result = latestActual()
-    result = json.loads(result)
-    for entry in result:
-        if entry["j"] == ctrySingle:
-            final = entry["latest"]
+    result = latestActualDate()
+    if result["Result"] == 1:
+        data = json.loads(result["Data"])
+        for entry in data:
+            if entry["j"] == ctrySingle:
+                final = entry["latest"]
 
-    lastEntry = datetime.datetime.strptime(final, date_format).date()
-    yesterday = datetime.date.today() - datetime.timedelta(days=1)
-    delta = yesterday - lastEntry
-    newEntries = []
-    haveLoaded = False
+        lastEntry = datetime.datetime.strptime(final, date_format).date()
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        delta = yesterday - lastEntry
+        newEntries = []
+        haveLoaded = False
 
-    if delta.days == 0:
-        finalStr = "Latest entries for " + ctry + " are yesterday.  Not performing a load."
+        if delta.days == 0:
+            finalStr = "Latest entries for " + ctry + " are yesterday.  Not performing a load."
+        else:
+            log("Last data found as at " + final + ".  Therefore missing " + str(delta.days) + " days of Data.")
+            gData = readFrom(ctry)
+            gData = gData[1:]
+            unique_dates = {}
+
+            for entry in gData:
+                dte = datetime.datetime.strptime(entry[1], date_format).date()
+                delta = dte - lastEntry
+                if delta.days >= 0:
+                    if entry[1] not in unique_dates:
+                        unique_mfcs = []
+                    else:
+                        unique_mfcs = unique_dates[entry[1]]
+
+                    if entry[0] not in unique_dates:
+                        unique_mfcs.append(entry[0])
+
+                    unique_dates[entry[1]] = unique_mfcs
+
+                    record = (entry[1], entry[0], ctry[0], int(entry[2].replace(',', '')))
+                    newEntries.append(record)
+                    haveLoaded = True
+
+            log("Loaded data for :")
+            log(json.dumps(unique_dates, indent=4))
+
+        loaded = loadActuals(newEntries)
+        if haveLoaded:
+            finalStr = "Loaded " + str(loaded) + " records for " + ctry + ".  This includes re-loading last data date."
+
+        log(finalStr)
+        retVal["Result"] = 1
+        retVal["Data"] = loaded
+        return retVal
     else:
-        log("Last data found as at " + final + ".  Therefore missing " + str(delta.days) + " days of Data.")
-        gData = readFrom(ctry)
-        gData = gData[1:]
-        unique_dates = {}
-
-        for entry in gData:
-            dte = datetime.datetime.strptime(entry[1], date_format).date()
-            delta = dte - lastEntry
-            if delta.days >= 0:
-                if entry[1] not in unique_dates:
-                    unique_mfcs = []
-                else:
-                    unique_mfcs = unique_dates[entry[1]]
-
-                if entry[0] not in unique_dates:
-                    unique_mfcs.append(entry[0])
-
-                unique_dates[entry[1]] = unique_mfcs
-
-                record = (entry[1], entry[0], ctry[0], int(entry[2].replace(',', '')))
-                newEntries.append(record)
-                haveLoaded = True
-
-        log("Loaded data for :")
-        log(json.dumps(unique_dates, indent=4))
-
-    loaded = loadActuals(newEntries)
-    if haveLoaded:
-        finalStr = "Loaded " + str(loaded) + " records for " + ctry + ".  This includes re-loading last data date."
-
-    log(finalStr)
-    return loaded
+        log('')
+        log(str(result["Data"]))
+        log('')
+        retVal["Result"] = 0
+        retVal["Data"] = result["Data"]
+        return retVal
 
 
 def gSyncActuals(countries):
+    retVal = {}
     for ctry in countries:
-        checkDaily(ctry)
+        localReturn = checkDaily(ctry)
+        if localReturn["Result"] == 1:
+            retVal["Result"] = 1
+            retVal["Data"] = {}
+            retVal["Data"][ctry] = localReturn["Data"]
+        else:
+            retVal["Result"] = 0
+            retVal["Data"] = localReturn["Data"]
+            break
+    return retVal
