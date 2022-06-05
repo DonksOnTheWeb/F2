@@ -1,8 +1,10 @@
 from flask import Flask, request
 from prophet import __version__
-from _prophet import forecast
+from _prophet import forecast, fullReForecast
 from _maria import getForecastData
 from _googlePull import gSyncActuals
+from _tsLog import log
+
 
 app = Flask(__name__)
 
@@ -45,6 +47,10 @@ def makeForecast():
     cut_Down = result[['ds', 'yhat']]
     return str(cut_Down.to_json(orient='split'))
 
+log("Server awake - checking actuals...")
+syncActuals()
+log("Performing full re-forcast...")
+fullReForecast()
 
 if __name__ == "__main__":
     app.run()

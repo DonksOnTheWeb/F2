@@ -69,7 +69,8 @@ def checkDaily(ctry):
 
                     unique_dates[entry[1]] = unique_mfcs
 
-                    MFC = sha256(entry[0].encode('utf-8')).hexdigest()
+                    MFC = entry[0]
+                    #MFC = sha256(MFC.encode('utf-8')).hexdigest()
 
                     record = (entry[1], MFC, ctry[0], int(entry[2].replace(',', '')))
                     newEntries.append(record)
