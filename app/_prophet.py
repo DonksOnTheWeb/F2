@@ -1,13 +1,18 @@
 import json
-
+import datetime
 import pandas as pd
 from prophet import Prophet
-from _maria import getLatestActuals
+from _maria import getLatestActuals, loadDailyForecast
 from _tsLog import log
 
 import os
-import warnings
-warnings.filterwarnings("ignore", message="The frame.append method is deprecated ")
+
+global debug
+debug = False
+if not debug:
+    import warnings
+    warnings.filterwarnings("ignore", message="The frame.append method is deprecated ")
+
 
 class suppress_stdout_stderr(object):
     '''
@@ -42,29 +47,30 @@ class suppress_stdout_stderr(object):
 
 def forecast(params):
     df = pd.io.json.json_normalize(params.get('history'))
-    m = Prophet(uncertainty_samples=0)
-    # if ('holiday_locale' in params):
-    #    m.add_country_holidays(country_name=params.get('holiday_locale'))
-
-    m.fit(df)
-
-    future = m.make_future_dataframe(periods=params.get('periods'))
-    return m.predict(future)
+    return doForecast(df)
 
 
 def doForecast(history_json):
     df = pd.json_normalize(history_json)
     m = Prophet(uncertainty_samples=0)
-    with suppress_stdout_stderr():
+    # if ('holiday_locale' in params):
+    #    m.add_country_holidays(country_name=params.get('holiday_locale'))
+    if debug:
         m.fit(df)
+    else:
+        with suppress_stdout_stderr():
+            m.fit(df)
     future = m.make_future_dataframe(70)
     return str(m.predict(future)[['ds', 'yhat']].to_json(orient='split'))
 
 
 def fullReForecast():
     data = getLatestActuals(None)
+    date_format = "%Y-%m-%d"
+    new_entries = []
     if data["Result"] == 1:
         holder = {}
+        jLookup = {}
         MFC_forecast = {}
         actuals = data["Data"]
         actual = json.loads(actuals)
@@ -72,6 +78,10 @@ def fullReForecast():
             MFC = entry["L"]
             Date = entry["Asat"]
             Orders = entry["Act"]
+            Jurisdiction = entry["J"]
+
+            if MFC not in jLookup:
+                jLookup[MFC] = Jurisdiction
 
             if MFC not in holder:
                 MFC_ts = []
@@ -82,14 +92,31 @@ def fullReForecast():
 
         failed = []
         try:
+            today = datetime.date.today()
+            creation_date = datetime.datetime.strftime(today, date_format)
             for MFC in holder:
                 MFC_forecast[MFC] = doForecast(holder[MFC])
+                localForecast = json.loads(MFC_forecast[MFC])
+                for entry in localForecast["data"]:
+                    ts = int(entry[0]) / 1000
+                    dte = datetime.datetime.fromtimestamp(ts).date()
+                    delta = dte - today
+                    if delta.days >= 0:
+                        dte = datetime.datetime.strftime(dte, date_format)
+                        J = jLookup[MFC]
+                        fcst = int(entry[1])
+                        record = (creation_date, dte, MFC, J, fcst)
+                        new_entries.append(record)
         except:
             failed.append(MFC)
 
-        log("Forecast failed for following list: - " + str(failed))
-        # log(str(MFC_forecast))
+        load = loadDailyForecast(new_entries)
+        if load["Result"] == 1:
+            log("Loaded " + str(load["Data"]) + " records into dailf forecast table.")
+            if len(failed) > 0:
+                log("Note - Forecast failed for following list: - " + str(failed))
+
 
     else:
-        log("OOps")
-        # we have an issue!
+        log("Failed to get latest actual data - ")
+        log(data["Data"])

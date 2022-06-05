@@ -137,3 +137,46 @@ def loadActuals(new_entries):
         retVal["Result"] = 0
         retVal["Data"] = try_Conn[1]
         return retVal
+
+
+def loadDailyForecast(new_entries):
+    retVal = {}
+    records = []
+    counter = 0
+    total = 0
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor()
+        insert_query = "INSERT IGNORE INTO scfd (CreationDate, Asat, L, J, Forecast) VALUES (%s, %s, %s, %s, %s)"
+        try:
+            for entry in new_entries:
+                creation_dte = entry[0]
+                dte = entry[1]
+                locid = entry[2]
+                j = entry[3]
+                forecast = int(entry[4])
+                recordEntry = (creation_dte, dte, locid, j, forecast)
+                records.append(recordEntry)
+                counter = counter + 1
+                total = total + 1
+                if counter == 999:
+                    cur.executemany(insert_query, records)
+                    counter = 0
+                    records = []
+
+            if counter > 0:
+                cur.executemany(insert_query, records)
+
+            my_Conn.commit()
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = total
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal

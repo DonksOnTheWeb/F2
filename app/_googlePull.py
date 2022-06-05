@@ -44,7 +44,7 @@ def checkDaily(ctry):
         lastEntry = datetime.datetime.strptime(final, date_format).date()
         yesterday = datetime.date.today() - datetime.timedelta(days=1)
         delta = yesterday - lastEntry
-        newEntries = []
+        new_entries = []
         haveLoaded = False
 
         if delta.days == 0:
@@ -73,13 +73,13 @@ def checkDaily(ctry):
                     #MFC = sha256(MFC.encode('utf-8')).hexdigest()
 
                     record = (entry[1], MFC, ctry[0], int(entry[2].replace(',', '')))
-                    newEntries.append(record)
+                    new_entries.append(record)
                     haveLoaded = True
 
             log("Loaded data for :")
             log(json.dumps(unique_dates, indent=4))
 
-        loaded = loadActuals(newEntries)
+        loaded = loadActuals(new_entries)
         if haveLoaded:
             finalStr = "Loaded " + str(loaded["Data"]) + " records for " + ctry
             finalStr = finalStr + ".  This includes re-loading last data date."
