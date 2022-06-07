@@ -122,12 +122,12 @@ def fullReForecast():
                         ts = int(entry[0]) / 1000
                         dte = datetime.datetime.fromtimestamp(ts).date()
                         delta = dte - today
-                        if delta.days >= 0:
-                            dte = datetime.datetime.strftime(dte, date_format)
-                            J = jLookup[MFC]
-                            fcst = int(entry[1])
-                            record = (creation_date, dte, MFC, J, fcst)
-                            new_entries.append(record)
+                        #if delta.days >= 0:
+                        dte = datetime.datetime.strftime(dte, date_format)
+                        J = jLookup[MFC]
+                        fcst = int(entry[1])
+                        record = (creation_date, dte, MFC, J, fcst)
+                        new_entries.append(record)
                 except:
                     failed.append(MFC)
 
