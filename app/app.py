@@ -75,9 +75,10 @@ log("Clearing old forecasts...")
 deleteOldForecast()
 log("Performing full re-forcast...")
 fullReForecast()
-log("Performing one-off...")
-loadForecastOneOff()
-log("Done")
+
+#log("Performing one-off...")
+#loadForecastOneOff()
+#log("Done")
 
 
 if __name__ == "__main__":
