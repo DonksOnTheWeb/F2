@@ -46,6 +46,52 @@ def getForecastData():
         return retVal
 
 
+def latestForecastDailyDate():
+    retVal = {}
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        statement = "SELECT max(CreationDate) as latest from scfd"
+        try:
+            cur.execute(statement)
+            result = cur.fetchall()
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = json.dumps(result, default=str)
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal
+
+
+def getLatestForecastDailyData():
+    retVal = {}
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        statement = "SELECT * from scfd where CreationDate = (select max(CreationDate) from scfd)"
+        try:
+            cur.execute(statement)
+            result = cur.fetchall()
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = json.dumps(result, default=str)
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal
+
+
 def latestActualDate():
     retVal = {}
     try_Conn = returnConnection()
@@ -69,7 +115,7 @@ def latestActualDate():
         return retVal
 
 
-def getLatestActuals(from_date):
+def getLatestActualData(from_date):
     retVal = {}
     try_Conn = returnConnection()
     if try_Conn[0] == 1:

@@ -1,7 +1,7 @@
 from flask import Flask, request
 from prophet import __version__
 from _prophet import forecast, fullReForecast
-from _maria import getForecastData
+from _maria import getForecastData, getLatestForecastDailyData
 from _googlePull import gSyncActuals
 from _tsLog import log
 
@@ -23,6 +23,15 @@ def version():
 def getForecastFromDB():
     params = request.get_json(silent=True)
     result = getForecastData()
+    if result["Result"] == 1:
+        return str(result["Data"])
+    else:
+        return "Fail - check logs"
+
+
+@app.route("/getLatestForecastDailyFromDB", methods=['GET'])
+def getForecastFromDB():
+    result = getLatestForecastDailyData()
     if result["Result"] == 1:
         return str(result["Data"])
     else:

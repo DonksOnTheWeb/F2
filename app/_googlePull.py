@@ -4,7 +4,7 @@ import datetime
 import json
 from hashlib import sha256
 
-from _maria import loadActuals, latestActualDate, getLatestActuals
+from _maria import loadActuals, latestActualDate, getLatestActualData
 from _tsLog import log
 
 
@@ -109,7 +109,7 @@ def gSyncActuals(countries):
             break
 
     if retVal["Result"] == 1:
-        data = getLatestActuals(None)
+        data = getLatestActualData(None)
         if data["Result"] == 0:
             retVal["Result"] = 0
 
