@@ -261,3 +261,43 @@ def loadDailyForecast(new_entries):
         retVal["Result"] = 0
         retVal["Data"] = try_Conn[1]
         return retVal
+
+
+
+
+
+
+
+
+def loadForecast(new_entries):
+    records = []
+    counter = 0
+    total = 0
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor()
+        insert_query = "INSERT IGNORE INTO scfh (Asat, L, J, Override) VALUES (%s, %s, %s, %s)"
+        for entry in new_entries:
+            dte = entry[0]
+            locid = entry[1]
+            j = 'CTRY'
+            print(dte, locid, j, str(entry[2]))
+            forecast = int(entry[2])
+
+            print(dte, locid, j, str(forecast))
+
+            recordEntry = (dte, locid, j, forecast)
+            records.append(recordEntry)
+            counter = counter + 1
+            total = total + 1
+            if counter == 999:
+                cur.executemany(insert_query, records)
+                counter = 0
+                records = []
+
+        if counter > 0:
+            cur.executemany(insert_query, records)
+
+        my_Conn.commit()
+        my_Conn.close()

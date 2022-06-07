@@ -2,7 +2,7 @@ from flask import Flask, request
 from prophet import __version__
 from _prophet import forecast, fullReForecast
 from _maria import getForecastData, getLatestForecastDailyData, getLatestActualData, deleteOldForecast
-from _googlePull import gSyncActuals
+from _googlePull import gSyncActuals, loadForecastOneOff
 from _tsLog import log
 
 app = Flask(__name__)
@@ -75,6 +75,9 @@ log("Clearing old forecasts...")
 deleteOldForecast()
 log("Performing full re-forcast...")
 fullReForecast()
+log("Performing one-off...")
+loadForecastOneOff()
+log("Done")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ import datetime
 import json
 from hashlib import sha256
 
-from _maria import loadActuals, latestActualDate, getLatestActualData
+from _maria import loadActuals, latestActualDate, loadForecast
 from _tsLog import log
 
 
@@ -111,3 +111,30 @@ def gSyncActuals(countries):
         retVal["Data"] = "Synchronised actuals"
 
     return retVal
+
+
+
+
+
+
+
+
+def loadForecastOneOff():
+
+    gData = readFrom("Forecast")
+    gData = gData[1:]
+    new_entries = []
+    date_format = "%Y-%m-%d"
+    for entry in gData:
+
+        MFC = entry[0]
+
+        dte = datetime.datetime.strptime(entry[1], date_format).date()
+
+        record = (dte, MFC, int(entry[2].replace(',', '')))
+        new_entries.append(record)
+
+    loadForecast(new_entries)
+    print(len(new_entries))
+    log("Loaded forecast data")
+
