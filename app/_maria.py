@@ -1,6 +1,6 @@
 import mariadb
 import json
-
+import datetime
 
 def returnConnection():
     f = open('db.json')
@@ -20,6 +20,32 @@ def returnConnection():
 
     return retVal
 
+
+def deleteOldForecast():
+    retVal = {}
+    try_Conn = returnConnection()
+    last_week = datetime.date.today() - datetime.timedelta(days=7)
+    date_format = "%Y-%m-%d"
+    last_week = datetime.datetime.strftime(last_week, date_format)
+
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        statement = "DELETE from scfd where CreationDate < %s"
+        last_week = (last_week, )
+        try:
+            cur.execute(statement, last_week)
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = json.dumps("Success", default=str)
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal
 
 def getForecastData():
     # j = params.get('j')
@@ -69,15 +95,17 @@ def latestForecastDailyDate():
         return retVal
 
 
-def getLatestForecastDailyData():
+def getLatestForecastDailyData(ctry):
     retVal = {}
     try_Conn = returnConnection()
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "SELECT * from scfd where CreationDate = (select max(CreationDate) from scfd)"
+        statement = "SELECT * from scfd where CreationDate = (select max(CreationDate) from scfd) and J = %s " \
+                    "order by L, Asat "
         try:
-            cur.execute(statement)
+            country = (ctry,)
+            cur.execute(statement, country)
             result = cur.fetchall()
             my_Conn.close()
             retVal["Result"] = 1
@@ -115,20 +143,27 @@ def latestActualDate():
         return retVal
 
 
-def getLatestActualData(from_date):
+def getLatestActualData(ctry, from_date):
     retVal = {}
     try_Conn = returnConnection()
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "SELECT * from sca"
+        statement = "SELECT * from sca where J = %s"
         try:
             if from_date is not None:
-                statement = statement + " where Asat >= %s"
-                AsatDate = (from_date,)
-                cur.execute(statement, AsatDate)
+                statement = statement + " and Asat >= %s"
+                params = (ctry, from_date, )
             else:
+                params = (ctry, )
+
+            statement = statement + " order by L, Asat"
+            if ctry == "All":
+                statement = "SELECT * from sca order by L, Asat"
                 cur.execute(statement)
+            else:
+                cur.execute(statement, params)
+
             result = cur.fetchall()
             my_Conn.close()
             retVal["Result"] = 1

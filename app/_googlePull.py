@@ -30,7 +30,6 @@ def readFrom(sheetname):
 
 def checkDaily(ctry):
     retVal = {}
-    ctrySingle = ctry[0]
     date_format = "%Y-%m-%d"
     final = "2000-01-01"
     result = latestActualDate()
@@ -38,7 +37,7 @@ def checkDaily(ctry):
     if result["Result"] == 1:
         data = json.loads(result["Data"])
         for entry in data:
-            if entry["j"] == ctrySingle:
+            if entry["j"] == ctry:
                 final = entry["latest"]
 
         lastEntry = datetime.datetime.strptime(final, date_format).date()
@@ -70,9 +69,9 @@ def checkDaily(ctry):
                     unique_dates[entry[1]] = unique_mfcs
 
                     MFC = entry[0]
-                    #MFC = sha256(MFC.encode('utf-8')).hexdigest()
+                    # MFC = sha256(MFC.encode('utf-8')).hexdigest()
 
-                    record = (entry[1], MFC, ctry[0], int(entry[2].replace(',', '')))
+                    record = (entry[1], MFC, ctry, int(entry[2].replace(',', '')))
                     new_entries.append(record)
                     haveLoaded = True
 
@@ -109,10 +108,6 @@ def gSyncActuals(countries):
             break
 
     if retVal["Result"] == 1:
-        data = getLatestActualData(None)
-        if data["Result"] == 0:
-            retVal["Result"] = 0
-
-        retVal["Data"] = data["Data"]
+        retVal["Data"] = "Synchronised actuals"
 
     return retVal

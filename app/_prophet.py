@@ -73,11 +73,11 @@ def fullReForecast():
     if result["Result"] == 1:
         data = json.loads(result["Data"])
         for entry in data:
-            final = entry["latest"]
+            if entry["latest"] is not None:
+                final = entry["latest"]
     else:
         log("Issue with retrieving last forecast creation date form DB.")
         return None
-
     lastForecast = datetime.datetime.strptime(final, date_format).date()
     today = datetime.date.today()
     delta = today - lastForecast
@@ -85,7 +85,7 @@ def fullReForecast():
     if delta.days == 0:
         log("Already performed a forecast for today.")
     else:
-        data = getLatestActualData(None)
+        data = getLatestActualData("All", None)
         date_format = "%Y-%m-%d"
         new_entries = []
         if data["Result"] == 1:
