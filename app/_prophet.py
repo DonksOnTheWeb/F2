@@ -99,7 +99,6 @@ def fullReForecast():
                 Date = entry["Asat"]
                 Orders = entry["Act"]
                 Jurisdiction = entry["J"]
-
                 if MFC not in jLookup:
                     jLookup[MFC] = Jurisdiction
 
@@ -111,12 +110,14 @@ def fullReForecast():
                 holder[MFC] = MFC_ts
 
             failed = []
-            try:
-                today = datetime.date.today()
-                creation_date = datetime.datetime.strftime(today, date_format)
-                for MFC in holder:
+
+            today = datetime.date.today()
+            creation_date = datetime.datetime.strftime(today, date_format)
+            for MFC in holder:
+                try:
                     MFC_forecast[MFC] = doForecast(holder[MFC])
                     localForecast = json.loads(MFC_forecast[MFC])
+
                     for entry in localForecast["data"]:
                         ts = int(entry[0]) / 1000
                         dte = datetime.datetime.fromtimestamp(ts).date()
@@ -127,8 +128,8 @@ def fullReForecast():
                             fcst = int(entry[1])
                             record = (creation_date, dte, MFC, J, fcst)
                             new_entries.append(record)
-            except:
-                failed.append(MFC)
+                except:
+                    failed.append(MFC)
 
             load = loadDailyForecast(new_entries)
             if load["Result"] == 1:
