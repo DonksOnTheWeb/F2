@@ -1,7 +1,10 @@
 from flask import Flask, request
 from prophet import __version__
 from _prophet import forecast, fullReForecast
-from _maria import getForecastData, getLatestForecastDailyData, getLatestActualData, deleteOldForecast
+
+from _maria import getForecastHistory, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
+from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList
+
 from _googlePull import gSyncActuals, loadForecastOneOff
 from _tsLog import log
 
@@ -19,10 +22,39 @@ def version():
     return __version__
 
 
-@app.route("/getForecastFromDB", methods=['GET'])
-def getForecastFromDB():
+@app.route("/getForecastHistoryFromDB", methods=['POST'])
+def getForecastHistoryFromDB():
     params = request.get_json(silent=True)
-    result = getForecastData()
+    groupAs = params.get('GroupAs')
+    MFC = params.get('MFC')
+    MFCList = []
+    for M in MFC:
+        MFCList.append(M)
+    result = getForecastHistory(groupAs, MFCList)
+    if result["Result"] == 0:
+        log(result["Data"])
+        result["Data"] = "Fail - check logs"
+    return result
+
+
+@app.route("/listMFCs", methods=['GET'])
+def listMFCsFromDB():
+    result = listMFCs()
+    if result["Result"] == 0:
+        log(result["Data"])
+        result["Data"] = "Fail - check logs"
+    return result
+
+
+@app.route("/getWorkingForecastFromDB", methods=['POST'])
+def getWorkingForecastFromDB():
+    params = request.get_json(silent=True)
+    groupAs = params.get('GroupAs')
+    MFC = params.get('MFC')
+    MFCList = []
+    for M in MFC:
+        MFCList.append(M)
+    result = getWorkingForecast(groupAs, MFCList)
     if result["Result"] == 0:
         log(result["Data"])
         result["Data"] = "Fail - check logs"
@@ -32,33 +64,48 @@ def getForecastFromDB():
 @app.route("/getLatestForecastDailyFromDB", methods=['POST'])
 def getLatestForecastDailyFromDB():
     params = request.get_json(silent=True)
-    ctry = params.get('Country')
-    result = getLatestForecastDailyData(ctry)
+    groupAs = params.get('GroupAs')
+    MFC = params.get('MFC')
+    MFCList = []
+    for M in MFC:
+        MFCList.append(M)
+    result = getLatestForecastDaily(groupAs, MFCList)
     if result["Result"] == 0:
         log(result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
 
-@app.route("/getLatestActualsFromDB", methods=['POST'])
-def getLatestActualsFromDB():
+@app.route("/getActualsFromDB", methods=['POST'])
+def getActualsFromDB():
     params = request.get_json(silent=True)
-    ctry = params.get('Country')
-    result = getLatestActualData(ctry, None)
+    groupAs = params.get('GroupAs')
+    MFC = params.get('MFC')
+    MFCList = []
+    for M in MFC:
+        MFCList.append(M)
+    result = getActuals(groupAs, MFCList)
     if result["Result"] == 0:
         log(result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
 
-@app.route("/syncActuals", methods=['GET'])
-def syncActuals():
-    countries = ['UK', 'FR', 'ES']
-    result = gSyncActuals(countries)
-    if result["Result"] == 0:
-        log(result["Data"])
-        result["Data"] = "Fail - check logs"
-    return result
+@app.route("/loadMFCs", methods=['POST'])
+def loadMFCsToDB():
+    params = request.get_json(silent=True)
+    MFCs = params.get('MFCs')
+    print(MFCs)
+    #result = delMFCList()
+    #if result["Result"] == 1:
+    #    result = loadMFCList(MFCs)
+    #    if result["Result"] == 0:
+    #        log(result["Data"])
+    #        result["Data"] = "Fail - check logs"
+    #    return result
+    #else:
+    #    log(result["Data"])
+    #    result["Data"] = "Fail - check logs"
 
 
 @app.route("/makeForecast", methods=['POST'])
@@ -70,13 +117,12 @@ def makeForecast():
 
 
 log("Server awake - checking actuals...")
-syncActuals()
+gSyncActuals(['UK','ES','FR'])
 log("Clearing old forecasts...")
-deleteOldForecast()
+deleteOldDailyForecasts()
 log("Performing full re-forcast...")
 fullReForecast()
-
-#log("Performing one-off...")
+#log("Performing one-off forecast history load...")
 #loadForecastOneOff()
 #log("Done")
 

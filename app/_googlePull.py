@@ -8,11 +8,10 @@ from _maria import loadActuals, latestActualDate, loadForecast
 from _tsLog import log
 
 
-def readFrom(sheetname):
+def readFrom(sheetname, cols=None):
     SERVICE_ACCOUNT_FILE = 'keys.json'
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
 
-    creds = None
     creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 
     # The ID and range of a sample spreadsheet.
@@ -21,120 +20,110 @@ def readFrom(sheetname):
     service = build('sheets', 'v4', credentials=creds)
 
     # Call the Sheets API
+
+    if cols is None:
+        cols = "!A:C"
+
     sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=sheetname + "!A:C").execute()
+    result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=sheetname + cols).execute()
     values = result.get('values', [])
 
     return values
 
 
-def checkDaily(ctry):
+def checkDaily(ctry, lastEntry):
     retVal = {}
     date_format = "%Y-%m-%d"
-    final = "2000-01-01"
+    new_entries = []
+
+    gData = readFrom(ctry)
+    gData = gData[1:]
+    haveLoaded = False
+    finalStr = "No new entries for " + ctry
+    for entry in gData:
+        dte = datetime.datetime.strptime(entry[1], date_format).date()
+        delta = dte - lastEntry
+        if delta.days >= -5:
+            MFC = entry[0]
+            record = (entry[1], MFC, int(entry[2].replace(',', '')))
+            new_entries.append(record)
+            haveLoaded = True
+
+    loaded = loadActuals(new_entries)
+    if haveLoaded:
+        finalStr = "Loaded " + str(loaded["Data"]) + " records.  Includes attempted re-load of last 5 days"
+
+    log(finalStr)
+    retVal["Result"] = 1
+    retVal["Data"] = loaded
+    return retVal
+
+
+def gSyncActuals(countries):
+    date_format = "%Y-%m-%d"
     result = latestActualDate()
-
+    final = "2000-01-01"
     if result["Result"] == 1:
-        data = json.loads(result["Data"])
-        for entry in data:
-            if entry["j"] == ctry:
-                final = entry["latest"]
+        data = json.loads(result["Data"])[0]
+        if data["latest"] is not None:
+            final = data["latest"]
 
+        log("Last entry at " + final)
         lastEntry = datetime.datetime.strptime(final, date_format).date()
-        yesterday = datetime.date.today() - datetime.timedelta(days=1)
-        delta = yesterday - lastEntry
-        new_entries = []
-        haveLoaded = False
 
-        if delta.days == 0:
-            finalStr = "Latest entries for " + ctry + " are yesterday.  Not performing a load."
-        else:
-            log("Last data found as at " + final + ".  Therefore missing " + str(delta.days) + " days of Data.")
-            gData = readFrom(ctry)
-            gData = gData[1:]
-            unique_dates = {}
-
-            for entry in gData:
-                dte = datetime.datetime.strptime(entry[1], date_format).date()
-                delta = dte - lastEntry
-                if delta.days >= 0:
-                    if entry[1] not in unique_dates:
-                        unique_mfcs = []
-                    else:
-                        unique_mfcs = unique_dates[entry[1]]
-
-                    if entry[0] not in unique_dates:
-                        unique_mfcs.append(entry[0])
-
-                    unique_dates[entry[1]] = unique_mfcs
-
-                    MFC = entry[0]
-                    # MFC = sha256(MFC.encode('utf-8')).hexdigest()
-
-                    record = (entry[1], MFC, ctry, int(entry[2].replace(',', '')))
-                    new_entries.append(record)
-                    haveLoaded = True
-
-            log("Loaded data for :")
-            log(json.dumps(unique_dates, indent=4))
-
-        loaded = loadActuals(new_entries)
-        if haveLoaded:
-            finalStr = "Loaded " + str(loaded["Data"]) + " records for " + ctry
-            finalStr = finalStr + ".  This includes re-loading last data date."
-
-        log(finalStr)
-        retVal["Result"] = 1
-        retVal["Data"] = loaded
-        return retVal
+        for ctry in countries:
+            localReturn = checkDaily(ctry, lastEntry)
+            if localReturn["Result"] == 0:
+                log('')
+                log(str(localReturn["Data"]))
+                log('')
+                break
     else:
         log('')
         log(str(result["Data"]))
         log('')
-        retVal["Result"] = 0
-        retVal["Data"] = result["Data"]
-        return retVal
-
-
-def gSyncActuals(countries):
-    retVal = {}
-    for ctry in countries:
-        localReturn = checkDaily(ctry)
-        if localReturn["Result"] == 1:
-            retVal["Result"] = 1
-        else:
-            retVal["Result"] = 0
-            retVal["Data"] = localReturn["Data"]
-            break
-
-    if retVal["Result"] == 1:
-        retVal["Data"] = "Synchronised actuals"
-
-    return retVal
 
 
 
 
 
 
+
+
+
+def buildMFCLookup():
+    MFCLookup = {}
+    MFCLookup = MFCLookupWrapper("UK", MFCLookup)
+    MFCLookup = MFCLookupWrapper("FR", MFCLookup)
+    MFCLookup = MFCLookupWrapper("ES", MFCLookup)
+    return MFCLookup
+
+
+def MFCLookupWrapper(ctry, MFCLookup):
+    gData = readFrom(ctry)
+    gData = gData[1:]
+    for entry in gData:
+        MFC = entry[0]
+        if MFC not in MFCLookup:
+            MFCLookup[MFC] = ctry
+    return MFCLookup
 
 
 def loadForecastOneOff():
-
-    gData = readFrom("Forecast")
+    MFCLookup = buildMFCLookup()
+    gData = readFrom("Forecast", "!A:E")
     gData = gData[1:]
     new_entries = []
     date_format = "%Y-%m-%d"
     for entry in gData:
-
         MFC = entry[0]
-
-        dte = datetime.datetime.strptime(entry[1], date_format).date()
-
-        record = (dte, MFC, int(entry[2].replace(',', '')))
-        new_entries.append(record)
+        if MFC in MFCLookup:
+            J = MFCLookup[MFC]
+            dte = datetime.datetime.strptime(entry[1], date_format).date()
+            fcst = int(float(entry[4].replace(',', '')))
+            record = (dte, MFC, J, fcst)
+            new_entries.append(record)
 
     loadForecast(new_entries)
     print(len(new_entries))
     log("Loaded forecast data")
-
