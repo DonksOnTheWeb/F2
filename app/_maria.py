@@ -308,6 +308,7 @@ def delMFCList():
         delete_query = "Delete from Locations"
         try:
             cur.execute(delete_query)
+            my_Conn.commit()
             my_Conn.close()
             retVal["Result"] = 1
         except mariadb.Error as e:
@@ -332,11 +333,10 @@ def loadMFCList(new_entries):
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor()
-        insert_query = "INSERT IGNORE INTO locations (location, Country, City, ShortName, AirportCode, CountryGroup, RegionGroup) VALUES " \
-                       "(%s, %s, %s, %s,%s, %s, %s)"
+        insert_query = "INSERT IGNORE INTO Locations (location, Country, City, ShortName, AirportCode, Region) VALUES (%s, %s, %s, %s,%s, %s)"
         try:
             for entry in new_entries:
-                recordEntry = (entry[0], entry[1], entry[2], entry[3], entry[4], entry[5], entry[6])
+                recordEntry = (entry[0], entry[1], entry[2], entry[3], entry[4], entry[5])
                 records.append(recordEntry)
                 counter = counter + 1
                 total = total + 1
@@ -351,6 +351,7 @@ def loadMFCList(new_entries):
             my_Conn.commit()
             my_Conn.close()
             retVal["Result"] = 1
+            retVal["Data"] = "Success"
         except mariadb.Error as e:
             retVal["Result"] = 0
             retVal["Data"] = str(e)

@@ -95,17 +95,17 @@ def getActualsFromDB():
 def loadMFCsToDB():
     params = request.get_json(silent=True)
     MFCs = params.get('MFCs')
-    print(MFCs)
-    #result = delMFCList()
-    #if result["Result"] == 1:
-    #    result = loadMFCList(MFCs)
-    #    if result["Result"] == 0:
-    #        log(result["Data"])
-    #        result["Data"] = "Fail - check logs"
-    #    return result
-    #else:
-    #    log(result["Data"])
-    #    result["Data"] = "Fail - check logs"
+    result = delMFCList()
+    if result["Result"] == 1:
+        result = loadMFCList(MFCs)
+        if result["Result"] == 0:
+            log(result["Data"])
+            result["Data"] = "Fail - check logs"
+        return result
+    else:
+        log(result["Data"])
+        result["Data"] = "Fail - check logs"
+    return result
 
 
 @app.route("/makeForecast", methods=['POST'])
@@ -117,7 +117,7 @@ def makeForecast():
 
 
 log("Server awake - checking actuals...")
-gSyncActuals(['UK','ES','FR'])
+gSyncActuals(['UK', 'ES', 'FR'])
 log("Clearing old forecasts...")
 deleteOldDailyForecasts()
 log("Performing full re-forcast...")
