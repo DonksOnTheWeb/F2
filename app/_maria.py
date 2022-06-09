@@ -157,9 +157,10 @@ def getForecastHistory(groupAs, MFCList):
         if try_Conn[0] == 1:
             my_Conn = try_Conn[1]
             cur = my_Conn.cursor(dictionary=True)
+            statement = "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
+                        " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
+                        " SUM(Forecast) as Forecast FROM scfh WHERE Location IN (" + MFCList + ") Group By Asat order by scfh.Asat"
             try:
-                statement = "SELECT Asat, '" + groupAs + "' AS Location, SUM(Forecast) as Forecast FROM scfh WHERE"
-                statement = statement + " Location IN (" + MFCList + ") Group By Asat order by Asat"
                 cur.execute(statement)
                 result = cur.fetchall()
                 my_Conn.close()
@@ -189,9 +190,10 @@ def getLatestForecastDaily(groupAs, MFCList):
         if try_Conn[0] == 1:
             my_Conn = try_Conn[1]
             cur = my_Conn.cursor(dictionary=True)
-            statement = "SELECT Asat, '" + groupAs + "' as Location, sum(Forecast) as Forecast from scfd where "
-            statement = statement + "CreationDate = (select max(CreationDate) from scfd) and Location in "
-            statement = statement + "(" + MFCList + ") Group by Asat order by AsAt"
+            statement = "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
+                        " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
+                        " sum(Forecast) as Forecast from scfd where CreationDate = (select max(CreationDate) from scfd) and" \
+                        " Location in (" + MFCList + ") Group by Asat order by scfd.AsAt"
             try:
                 cur.execute(statement)
                 result = cur.fetchall()
@@ -220,11 +222,11 @@ def getWorkingForecast(groupAs, MFCList):
         if try_Conn[0] == 1:
             my_Conn = try_Conn[1]
             cur = my_Conn.cursor(dictionary=True)
-            statement = "WITH window AS("
-            statement = statement + "SELECT *, ROW_NUMBER() OVER (PARTITION BY Location ORDER BY IO ASC) as RN from scfw)"
-            statement = statement + " SELECT Asat, CASE WHEN Asat IS NULL THEN NULL ELSE '" + groupAs + "' END AS Location, sum(Baseline) as Baseline"
-            statement = statement + " , sum(Override) as Override from window where Location in (" + MFCList + ") AND RN = 1"
-            statement = statement + " Group by Asat order by Asat"
+            statement = "WITH window AS(SELECT *, ROW_NUMBER() OVER (PARTITION BY Location ORDER BY IO ASC) as RN from scfw) " \
+                        "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
+                        " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
+                        " sum(Baseline) as Baseline, sum(Override) as Override from window where" \
+                        " Location in (" + MFCList + ") AND RN = 1 Group by Asat order by window.Asat"
             try:
                 cur.execute(statement)
                 result = cur.fetchall()
@@ -253,8 +255,13 @@ def getActuals(groupAs, MFCList):
         if try_Conn[0] == 1:
             my_Conn = try_Conn[1]
             cur = my_Conn.cursor(dictionary=True)
-            statement = "SELECT Asat, '" + groupAs + "' as Location, sum(Act) as Act from sca where "
-            statement = statement + "Location in (" + MFCList + ") group by Asat order by Asat "
+            statement = "SELECT DATE_FORMAT(db_date,'%d-%b-%Y') AS Asat," \
+                        " DATE_FORMAT(DATE_ADD(db_date, INTERVAL - WEEKDAY(db_date) DAY), '%d-%b-%Y') AS Commencing," \
+                        " SUM(Act) AS Act FROM DateDimension d " \
+                        " LEFT OUTER JOIN sca a ON d.db_date = a.Asat AND Location IN (" + MFCList + ")" \
+                        " WHERE db_date >= (SELECT MIN(Asat) FROM sca WHERE Location IN (" + MFCList + "))" \
+                        " AND db_date <= (SELECT MAX(Asat) FROM sca WHERE Location IN (" + MFCList + ")) " \
+                        " GROUP BY db_date ORDER BY db_date"
             try:
                 cur.execute(statement)
                 result = cur.fetchall()
@@ -333,10 +340,11 @@ def loadMFCList(new_entries):
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor()
-        insert_query = "INSERT IGNORE INTO Locations (location, Country, City, ShortName, AirportCode, Region) VALUES (%s, %s, %s, %s,%s, %s)"
+        insert_query = "INSERT IGNORE INTO Locations (Location, Country, City, FriendlyName, ShortName, AirportCode, Region) " \
+                       "VALUES (%s, %s, %s, %s,%s, %s, %s)"
         try:
             for entry in new_entries:
-                recordEntry = (entry[0], entry[1], entry[2], entry[3], entry[4], entry[5])
+                recordEntry = (entry[0], entry[1], entry[2], entry[3], entry[4], entry[5], entry[6])
                 records.append(recordEntry)
                 counter = counter + 1
                 total = total + 1

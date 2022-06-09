@@ -40,8 +40,13 @@ def checkDaily(ctry, lastEntry):
     gData = gData[1:]
     haveLoaded = False
     finalStr = "No new entries for " + ctry
+    latestFileDate = datetime.datetime.strptime("2000-01-01", date_format).date()
     for entry in gData:
         dte = datetime.datetime.strptime(entry[1], date_format).date()
+        delta = dte - latestFileDate
+        if delta.days >= 0:
+            latestFileDate = dte
+
         delta = dte - lastEntry
         if delta.days >= -5:
             MFC = entry[0]
@@ -54,6 +59,7 @@ def checkDaily(ctry, lastEntry):
         finalStr = "Loaded " + str(loaded["Data"]) + " records.  Includes attempted re-load of last 5 days"
 
     log(finalStr)
+    log("Latest file date found for " + ctry + " is " + datetime.datetime.strftime(latestFileDate, date_format))
     retVal["Result"] = 1
     retVal["Data"] = loaded
     return retVal
@@ -68,7 +74,7 @@ def gSyncActuals(countries):
         if data["latest"] is not None:
             final = data["latest"]
 
-        log("Last entry at " + final)
+        log("Last DB entry is " + final)
         lastEntry = datetime.datetime.strptime(final, date_format).date()
 
         for ctry in countries:
@@ -82,13 +88,6 @@ def gSyncActuals(countries):
         log('')
         log(str(result["Data"]))
         log('')
-
-
-
-
-
-
-
 
 
 def buildMFCLookup():
