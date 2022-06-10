@@ -245,7 +245,6 @@ def getWorkingForecast(groupAs, MFCList):
         retVal["Result"] = 0
         retVal["Data"] = MFCList["Data"]
 
-
 def getActuals(groupAs, MFCList):
     retVal = {}
     MFCList = cleanseMFCList(MFCList)
@@ -279,7 +278,6 @@ def getActuals(groupAs, MFCList):
     else:
         retVal["Result"] = 0
         retVal["Data"] = MFCList["Data"]
-
 
 def getAllActuals():
     #USed by the fullReForecast triggered every AM
