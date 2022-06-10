@@ -225,7 +225,7 @@ def getWorkingForecast(groupAs, MFCList):
             statement = "WITH window AS(SELECT *, ROW_NUMBER() OVER (PARTITION BY Location ORDER BY IO ASC) as RN from scfw) " \
                         "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
                         " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
-                        " sum(Baseline) as Baseline, sum(Override) as Override from window where" \
+                        " sum(Forecast) as Forecast from window where" \
                         " Location in (" + MFCList + ") AND RN = 1 Group by Asat order by window.Asat"
             try:
                 cur.execute(statement)
