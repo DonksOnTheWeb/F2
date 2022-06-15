@@ -211,6 +211,7 @@ def getLatestForecastDaily(groupAs, MFCList):
     else:
         retVal["Result"] = 0
         retVal["Data"] = MFCList["Data"]
+        return retVal
 
 
 def getWorkingForecast(groupAs, MFCList):
@@ -222,7 +223,7 @@ def getWorkingForecast(groupAs, MFCList):
         if try_Conn[0] == 1:
             my_Conn = try_Conn[1]
             cur = my_Conn.cursor(dictionary=True)
-            statement = "WITH window AS(SELECT *, ROW_NUMBER() OVER (PARTITION BY Location ORDER BY IO ASC) as RN from scfw) " \
+            statement = "WITH window AS(SELECT *, ROW_NUMBER() OVER (PARTITION BY Location, Asat ORDER BY IO ASC) as RN from scfw) " \
                         "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
                         " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
                         " sum(Forecast) as Forecast from window where" \
@@ -244,6 +245,8 @@ def getWorkingForecast(groupAs, MFCList):
     else:
         retVal["Result"] = 0
         retVal["Data"] = MFCList["Data"]
+        return retVal
+
 
 def getActuals(groupAs, MFCList):
     retVal = {}
@@ -278,6 +281,8 @@ def getActuals(groupAs, MFCList):
     else:
         retVal["Result"] = 0
         retVal["Data"] = MFCList["Data"]
+        return retVal
+
 
 def getAllActuals():
     #USed by the fullReForecast triggered every AM
@@ -300,6 +305,44 @@ def getAllActuals():
     else:
         retVal["Result"] = 0
         retVal["Data"] = try_Conn[1]
+        return retVal
+
+
+def updateWkg(MFCList, Updates):
+    retVal = {}
+    MFCList = cleanseMFCList(MFCList)
+    if MFCList["Result"] == 1:
+        MFCList = list(MFCList["Data"].split(","))
+        try_Conn = returnConnection()
+        if try_Conn[0] == 1:
+            my_Conn = try_Conn[1]
+            cur = my_Conn.cursor(dictionary=True)
+            for M in MFCList:
+                for U in Updates:
+                    Dte = U['Dte']
+                    Pcnt = U['Pcnt']
+                    try:
+                        print("Setting " + M + " for " + Dte + " at " + str(Pcnt))
+                        statement = "CALL loadForecast('" + Dte + "', " + M + ", " + str(Pcnt) + ")"
+                        cur.execute(statement)
+                        #statement = "CALL loadForecast(%(dte)s,%(m)s,%(p)s)"
+                        #cur.execute(statement, {'dte': Dte, 'm': M, 'p': Pcnt})
+                        my_Conn.commit()
+                    except mariadb.Error as e:
+                        print(e)
+                        retVal["Result"] = 0
+                        retVal["Data"] = str(e)
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = "Success"
+            return retVal
+        else:
+            retVal["Result"] = 0
+            retVal["Data"] = try_Conn[1]
+            return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = MFCList["Data"]
         return retVal
 
 
@@ -459,13 +502,12 @@ def loadForecast(new_entries):
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor()
-        insert_query = "INSERT IGNORE INTO scfh (Asat, L, J, Forecast) VALUES (%s, %s, %s, %s)"
+        insert_query = "INSERT IGNORE INTO scfh (Asat, Location, Forecast) VALUES (%s, %s, %s)"
         for entry in new_entries:
             dte = entry[0]
             locid = entry[1]
-            j = entry[2]
-            forecast = int(entry[3])
-            recordEntry = (dte, locid, j, forecast)
+            forecast = int(entry[2])
+            recordEntry = (dte, locid, forecast)
             records.append(recordEntry)
             counter = counter + 1
             total = total + 1

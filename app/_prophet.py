@@ -61,11 +61,11 @@ def doForecast(history_json):
     else:
         with suppress_stdout_stderr():
             m.fit(df)
-    future = m.make_future_dataframe(70)
+    future = m.make_future_dataframe(140)
     return str(m.predict(future)[['ds', 'yhat']].to_json(orient='split'))
 
 
-def fullReForecast():
+def fullReForecast(alwaysForce=0):
     date_format = "%Y-%m-%d"
     final = "2000-01-01"
     result = latestForecastDailyDate()
@@ -79,7 +79,7 @@ def fullReForecast():
         today = datetime.date.today()
         delta = today - lastForecast
 
-        if delta.days == 0:
+        if delta.days == 0 and alwaysForce == 0:
             log("Already performed a forecast for today.")
         else:
             data = getAllActuals()

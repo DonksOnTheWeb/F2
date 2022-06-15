@@ -35,7 +35,7 @@ def checkDaily(ctry, lastEntry):
     retVal = {}
     date_format = "%Y-%m-%d"
     new_entries = []
-
+    #Do a try on the readFrom line
     gData = readFrom(ctry)
     gData = gData[1:]
     haveLoaded = False
@@ -109,19 +109,18 @@ def MFCLookupWrapper(ctry, MFCLookup):
 
 
 def loadForecastOneOff():
-    MFCLookup = buildMFCLookup()
+    #MFCLookup = buildMFCLookup()
     gData = readFrom("Forecast", "!A:E")
     gData = gData[1:]
     new_entries = []
     date_format = "%Y-%m-%d"
     for entry in gData:
         MFC = entry[0]
-        if MFC in MFCLookup:
-            J = MFCLookup[MFC]
-            dte = datetime.datetime.strptime(entry[1], date_format).date()
-            fcst = int(float(entry[4].replace(',', '')))
-            record = (dte, MFC, J, fcst)
-            new_entries.append(record)
+        #J = MFCLookup[MFC]
+        dte = datetime.datetime.strptime(entry[1], date_format).date()
+        fcst = int(float(entry[4].replace(',', '')))
+        record = (dte, MFC, fcst)
+        new_entries.append(record)
 
     loadForecast(new_entries)
     print(len(new_entries))

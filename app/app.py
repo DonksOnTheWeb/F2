@@ -3,7 +3,7 @@ from prophet import __version__
 from _prophet import forecast, fullReForecast
 
 from _maria import getForecastHistory, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
-from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList
+from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg
 
 from _googlePull import gSyncActuals, loadForecastOneOff
 from _tsLog import log
@@ -55,6 +55,21 @@ def getWorkingForecastFromDB():
     for M in MFC:
         MFCList.append(M)
     result = getWorkingForecast(groupAs, MFCList)
+    if result["Result"] == 0:
+        log(result["Data"])
+        result["Data"] = "Fail - check logs"
+    return result
+
+
+@app.route("/updateWorking", methods=['POST'])
+def updateWorkingForecast():
+    params = request.get_json(silent=True)
+    MFC = params.get('MFC')
+    MFCList = []
+    for M in MFC:
+        MFCList.append(M)
+    Updates = params.get('Updates')
+    result = updateWkg(MFCList, Updates)
     if result["Result"] == 0:
         log(result["Data"])
         result["Data"] = "Fail - check logs"
@@ -122,9 +137,9 @@ log("Clearing old forecasts...")
 deleteOldDailyForecasts()
 log("Performing full re-forcast...")
 fullReForecast()
-#log("Performing one-off forecast history load...")
+log("One-off forecast history load disabled")
 #loadForecastOneOff()
-#log("Done")
+log("Done")
 
 if __name__ == "__main__":
     app.run()
