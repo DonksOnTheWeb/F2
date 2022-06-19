@@ -2,7 +2,6 @@ import mariadb
 import json
 import datetime
 
-
 def returnConnection():
     f = open('db.json')
     data = json.load(f)
@@ -121,6 +120,28 @@ def deleteOldDailyForecasts():
         retVal["Data"] = try_Conn[1]
         return retVal
 
+
+def redetermineTiers():
+    retVal = {}
+    try_Conn = returnConnection()
+
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        statement = "call DetermineTier()"
+        try:
+            cur.execute(statement)
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = json.dumps("Success", default=str)
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal
 
 #Called from REST API
 

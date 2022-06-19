@@ -3,15 +3,14 @@ import datetime
 import pandas as pd
 from prophet import Prophet
 from _maria import getAllActuals, loadDailyForecast, latestForecastDailyDate
-from _tsLog import log
-
+import logging
 import os
 
 global debug
+
 debug = False
 if not debug:
     import warnings
-
     warnings.filterwarnings("ignore", message="The frame.append method is deprecated ")
 
 
@@ -80,7 +79,7 @@ def fullReForecast(alwaysForce=0):
         delta = today - lastForecast
 
         if delta.days == 0 and alwaysForce == 0:
-            log("Already performed a forecast for today.")
+            logging.info("Already performed a forecast for today.")
         else:
             data = getAllActuals()
             date_format = "%Y-%m-%d"
@@ -125,14 +124,14 @@ def fullReForecast(alwaysForce=0):
 
                 load = loadDailyForecast(new_entries)
                 if load["Result"] == 1:
-                    log("Loaded " + str(load["Data"]) + " records into daily forecast table.")
+                    logging.info("Loaded " + str(load["Data"]) + " records into daily forecast table.")
                     if len(failed) > 0:
-                        log("Note - Forecast failed for following list: - " + str(failed))
+                        logging.info("Note - Forecast failed for following list: - " + str(failed))
 
             else:
-                log("Failed to get latest actual data - ")
-                log(data["Data"])
+                logging.warning("Failed to get latest actual data - ")
+                logging.warning(data["Data"])
     else:
-        log('')
-        log(str(result["Data"]))
-        log('')
+        logging.warning('')
+        logging.warning(str(result["Data"]))
+        logging.warning('')

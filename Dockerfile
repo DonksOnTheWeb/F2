@@ -21,6 +21,7 @@ RUN pip3 install --upgrade --no-cache-dir pytz
 
 COPY gunicorn_config.py /deploy/gunicorn_config.py
 COPY ./app /deploy/app
+COPY ./logs /deploy/logs
 
 WORKDIR /deploy/app
 
