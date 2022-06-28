@@ -3,7 +3,7 @@ from prophet import __version__
 from _prophet import forecast, fullReForecast
 
 from _maria import getForecastHistory, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
-from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, redetermineTiers
+from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, redetermineTiers, ignoreWeeksOn, ignoreWeeksOff
 
 from _googlePull import gSyncActuals, loadForecastOneOff
 
@@ -71,6 +71,26 @@ def getWorkingForecastFromDB():
     for M in MFC:
         MFCList.append(M)
     result = getWorkingForecast(groupAs, MFCList)
+    if result["Result"] == 0:
+        logging.warning(result["Data"])
+        result["Data"] = "Fail - check logs"
+    return result
+
+
+@app.route("/updateWeeks", methods=['POST'])
+def toggleIgnoredWeeks():
+    params = request.get_json(silent=True)
+    MFC = params.get('MFC')
+    MFCList = []
+    for M in MFC:
+        MFCList.append(M)
+    WeekCommencing = params.get('WeekCommencing')
+    ToggleIgnoreOn = params.get('ToggleIgnoreOn')
+    if ToggleIgnoreOn == 'True':
+        result = ignoreWeeksOn(MFCList, WeekCommencing)
+    else:
+        result = ignoreWeeksOff(MFCList, WeekCommencing)
+
     if result["Result"] == 0:
         logging.warning(result["Data"])
         result["Data"] = "Fail - check logs"

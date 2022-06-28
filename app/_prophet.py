@@ -2,7 +2,7 @@ import json
 import datetime
 import pandas as pd
 from prophet import Prophet
-from _maria import getAllActuals, loadDailyForecast, latestForecastDailyDate
+from _maria import getAllActuals, loadDailyForecast, latestForecastDailyDate, countryFromMFC
 import logging
 import os
 
@@ -47,14 +47,21 @@ class suppress_stdout_stderr(object):
 
 def forecast(params):
     df = pd.io.json.json_normalize(params.get('history'))
+    #hols = ''
+    #if ('holiday_locale' in params):
+    #    hols = params.get('holiday_locale')
     return doForecast(df)
 
 
-def doForecast(history_json):
+def doForecast(history_json, ctry=None):
     df = pd.json_normalize(history_json)
-    m = Prophet(uncertainty_samples=0)
-    # if ('holiday_locale' in params):
-    #    m.add_country_holidays(country_name=params.get('holiday_locale'))
+    m = Prophet(uncertainty_samples=0, changepoint_prior_scale=0.8, daily_seasonality=True, weekly_seasonality=True)
+    m = m.add_seasonality(
+        name='monthly',
+        period=30,
+        fourier_order=10)
+    if ctry is not None:
+        m.add_country_holidays(country_name=ctry)
     if debug:
         m.fit(df)
     else:
@@ -107,7 +114,11 @@ def fullReForecast(alwaysForce=0):
                 creation_date = datetime.datetime.strftime(today, date_format)
                 for MFC in holder:
                     try:
-                        MFC_forecast[MFC] = doForecast(holder[MFC])
+                        try:
+                            ctry = json.loads(countryFromMFC(MFC)["Data"])[0]['Country']
+                        except:
+                            ctry = None
+                        MFC_forecast[MFC] = doForecast(holder[MFC], ctry)
                         localForecast = json.loads(MFC_forecast[MFC])
 
                         for entry in localForecast["data"]:

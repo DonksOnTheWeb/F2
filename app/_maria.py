@@ -27,7 +27,7 @@ def latestActualDate():
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "SELECT max(asat) as latest from sca"
+        statement = "SELECT max(asat) as latest from Actuals"
         try:
             cur.execute(statement)
             result = cur.fetchall()
@@ -50,9 +50,33 @@ def latestForecastDailyDate():
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "SELECT max(CreationDate) as latest from scfd"
+        statement = "SELECT max(CreationDate) as latest from AutoForecast"
         try:
             cur.execute(statement)
+            result = cur.fetchall()
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = json.dumps(result, default=str)
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal
+
+
+def countryFromMFC(MFC):
+    retVal = {}
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        statement = "SELECT Country FROM Locations WHERE Location = %s"
+        try:
+            MFC = (MFC,)
+            cur.execute(statement, MFC)
             result = cur.fetchall()
             my_Conn.close()
             retVal["Result"] = 1
@@ -104,7 +128,7 @@ def deleteOldDailyForecasts():
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "DELETE from scfd where CreationDate < %s"
+        statement = "DELETE from AutoForecast where CreationDate < %s"
         last_week = (last_week,)
         try:
             cur.execute(statement, last_week)
@@ -180,7 +204,7 @@ def getForecastHistory(groupAs, MFCList):
             cur = my_Conn.cursor(dictionary=True)
             statement = "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
                         " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
-                        " SUM(Forecast) as Forecast FROM scfh WHERE Location IN (" + MFCList + ") Group By Asat order by scfh.Asat"
+                        " SUM(Forecast) as Forecast FROM OfficialForecast WHERE Location IN (" + MFCList + ") Group By Asat order by OfficialForecast.Asat"
             try:
                 cur.execute(statement)
                 result = cur.fetchall()
@@ -213,8 +237,8 @@ def getLatestForecastDaily(groupAs, MFCList):
             cur = my_Conn.cursor(dictionary=True)
             statement = "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
                         " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
-                        " sum(Forecast) as Forecast from scfd where CreationDate = (select max(CreationDate) from scfd) and" \
-                        " Location in (" + MFCList + ") Group by Asat order by scfd.AsAt"
+                        " sum(Forecast) as Forecast from AutoForecast where CreationDate = (select max(CreationDate) from AutoForecast) and" \
+                        " Location in (" + MFCList + ") Group by Asat order by AutoForecast.AsAt"
             try:
                 cur.execute(statement)
                 result = cur.fetchall()
@@ -244,7 +268,7 @@ def getWorkingForecast(groupAs, MFCList):
         if try_Conn[0] == 1:
             my_Conn = try_Conn[1]
             cur = my_Conn.cursor(dictionary=True)
-            statement = "WITH window AS(SELECT *, ROW_NUMBER() OVER (PARTITION BY Location, Asat ORDER BY IO ASC) as RN from scfw) " \
+            statement = "WITH window AS(SELECT *, ROW_NUMBER() OVER (PARTITION BY Location, Asat ORDER BY IO ASC) as RN from WorkingForecast) " \
                         "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
                         " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
                         " sum(Forecast) as Forecast from window where" \
@@ -281,9 +305,9 @@ def getActuals(groupAs, MFCList):
             statement = "SELECT DATE_FORMAT(db_date,'%d-%b-%Y') AS Asat," \
                         " DATE_FORMAT(DATE_ADD(db_date, INTERVAL - WEEKDAY(db_date) DAY), '%d-%b-%Y') AS Commencing," \
                         " SUM(Act) AS Act FROM DateDimension d " \
-                        " LEFT OUTER JOIN sca a ON d.db_date = a.Asat AND Location IN (" + MFCList + ")" \
-                        " WHERE db_date >= (SELECT MIN(Asat) FROM sca WHERE Location IN (" + MFCList + "))" \
-                        " AND db_date <= (SELECT MAX(Asat) FROM sca WHERE Location IN (" + MFCList + ")) " \
+                        " LEFT OUTER JOIN Actuals a ON d.db_date = a.Asat AND Location IN (" + MFCList + ")" \
+                        " WHERE db_date >= (SELECT MIN(Asat) FROM Actuals WHERE Location IN (" + MFCList + "))" \
+                        " AND db_date <= (SELECT MAX(Asat) FROM Actuals WHERE Location IN (" + MFCList + ")) " \
                         " GROUP BY db_date ORDER BY db_date"
             try:
                 cur.execute(statement)
@@ -306,13 +330,13 @@ def getActuals(groupAs, MFCList):
 
 
 def getAllActuals():
-    #USed by the fullReForecast triggered every AM
+    #USed by the fullReForecast triggered every AMresult = ignoreWeeksOn(MFCList, WeekCommencing)
     retVal = {}
     try_Conn = returnConnection()
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "SELECT Asat, Location, Act from sca"
+        statement = "CALL LiveActuals()"
         try:
             cur.execute(statement)
             result = cur.fetchall()
@@ -343,11 +367,8 @@ def updateWkg(MFCList, Updates):
                     Dte = U['Dte']
                     Pcnt = U['Pcnt']
                     try:
-                        print("Setting " + M + " for " + Dte + " at " + str(Pcnt))
                         statement = "CALL loadForecast('" + Dte + "', " + M + ", " + str(Pcnt) + ")"
                         cur.execute(statement)
-                        #statement = "CALL loadForecast(%(dte)s,%(m)s,%(p)s)"
-                        #cur.execute(statement, {'dte': Dte, 'm': M, 'p': Pcnt})
                         my_Conn.commit()
                     except mariadb.Error as e:
                         print(e)
@@ -356,6 +377,83 @@ def updateWkg(MFCList, Updates):
             my_Conn.close()
             retVal["Result"] = 1
             retVal["Data"] = "Success"
+            return retVal
+        else:
+            retVal["Result"] = 0
+            retVal["Data"] = try_Conn[1]
+            return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = MFCList["Data"]
+        return retVal
+
+
+def ignoreWeeksOn(MFCList, WeekCommencing):
+    retVal = {}
+    records = []
+    counter = 0
+    total = 0
+    MFCList = cleanseMFCList(MFCList)
+    if MFCList["Result"] == 1:
+        MFCList = list(MFCList["Data"].split(","))
+        try_Conn = returnConnection()
+        if try_Conn[0] == 1:
+            my_Conn = try_Conn[1]
+            cur = my_Conn.cursor()
+            wc = WeekCommencing
+            upd_query = "INSERT IGNORE INTO IgnoredWeeks (Location, WeekCommencing) VALUES (%s, %s)"
+            try:
+                for M in MFCList:
+                    recordEntry = (M.replace("'", "").strip(), wc)
+                    records.append(recordEntry)
+                    counter = counter + 1
+                    total = total + 1
+                    if counter == 999:
+                        cur.executemany(upd_query, records)
+                        counter = 0
+                        records = []
+
+                if counter > 0:
+                    cur.executemany(upd_query, records)
+
+                my_Conn.commit()
+                my_Conn.close()
+                retVal["Result"] = 1
+                retVal["Data"] = "Success"
+            except mariadb.Error as e:
+                retVal["Result"] = 0
+                retVal["Data"] = str(e)
+            return retVal
+        else:
+            retVal["Result"] = 0
+            retVal["Data"] = try_Conn[1]
+            return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = MFCList["Data"]
+        return retVal
+
+
+def ignoreWeeksOff(MFCList, WeekCommencing):
+    retVal = {}
+    MFCList = cleanseMFCList(MFCList)
+    if MFCList["Result"] == 1:
+        MFCList = MFCList["Data"]
+        try_Conn = returnConnection()
+        if try_Conn[0] == 1:
+            my_Conn = try_Conn[1]
+            cur = my_Conn.cursor()
+            wc = WeekCommencing
+            statement = "DELETE FROM IgnoredWeeks where WeekCommencing = '" + wc + "' AND Location IN (" + MFCList + ")"
+            try:
+                cur.execute(statement)
+                my_Conn.commit()
+                my_Conn.close()
+                retVal["Result"] = 1
+                retVal["Data"] = "Success"
+            except mariadb.Error as e:
+                retVal["Result"] = 0
+                retVal["Data"] = str(e)
             return retVal
         else:
             retVal["Result"] = 0
@@ -441,7 +539,7 @@ def loadActuals(new_entries):
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor()
-        insert_query = "INSERT IGNORE INTO sca (Asat, Location, Act) VALUES (%s, %s, %s)"
+        insert_query = "INSERT IGNORE INTO Actuals (Asat, Location, Act) VALUES (%s, %s, %s)"
         try:
             for entry in new_entries:
                 dte = entry[0]
@@ -482,7 +580,7 @@ def loadDailyForecast(new_entries):
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor()
-        insert_query = "INSERT IGNORE INTO scfd (CreationDate, Asat, Location, Forecast) VALUES (%s, %s, %s, %s)"
+        insert_query = "INSERT IGNORE INTO AutoForecast (CreationDate, Asat, Location, Forecast) VALUES (%s, %s, %s, %s)"
         try:
             for entry in new_entries:
                 creation_dte = entry[0]
@@ -523,7 +621,7 @@ def loadForecast(new_entries):
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor()
-        insert_query = "INSERT IGNORE INTO scfh (Asat, Location, Forecast) VALUES (%s, %s, %s)"
+        insert_query = "INSERT IGNORE INTO OfficialForecast (Asat, Location, Forecast) VALUES (%s, %s, %s)"
         for entry in new_entries:
             dte = entry[0]
             locid = entry[1]
