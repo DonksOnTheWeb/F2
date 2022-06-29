@@ -3,7 +3,7 @@ from prophet import __version__
 from _prophet import forecast, fullReForecast
 
 from _maria import getForecastHistory, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
-from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, redetermineTiers, ignoreWeeksOn, ignoreWeeksOff
+from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, redetermineTiers, ignoreWeeksOn, ignoreWeeksOff, getIgnoredWeeks
 
 from _googlePull import gSyncActuals, loadForecastOneOff
 
@@ -27,7 +27,7 @@ logging.info("STARTING UP LOGGER")
 app = Flask(__name__)
 
 
-@app.route("/")
+@app.route("/")getIgnoredWeeks
 def root():
     html = "Welcome"
     return html.format(version=__version__)
@@ -71,6 +71,21 @@ def getWorkingForecastFromDB():
     for M in MFC:
         MFCList.append(M)
     result = getWorkingForecast(groupAs, MFCList)
+    if result["Result"] == 0:
+        logging.warning(result["Data"])
+        result["Data"] = "Fail - check logs"
+    return result
+
+
+@app.route("/getWeeks", methods=['POST'])
+def getWeeks():
+    params = request.get_json(silent=True)
+    MFC = params.get('MFC')
+    MFCList = []
+    for M in MFC:
+        MFCList.append(M)
+        result = getIgnoredWeeks(MFCList)
+
     if result["Result"] == 0:
         logging.warning(result["Data"])
         result["Data"] = "Fail - check logs"

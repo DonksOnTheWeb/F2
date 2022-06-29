@@ -330,7 +330,7 @@ def getActuals(groupAs, MFCList):
 
 
 def getAllActuals():
-    #USed by the fullReForecast triggered every AMresult = ignoreWeeksOn(MFCList, WeekCommencing)
+    #Used by the fullReForecast triggered every Morning
     retVal = {}
     try_Conn = returnConnection()
     if try_Conn[0] == 1:
@@ -377,6 +377,39 @@ def updateWkg(MFCList, Updates):
             my_Conn.close()
             retVal["Result"] = 1
             retVal["Data"] = "Success"
+            return retVal
+        else:
+            retVal["Result"] = 0
+            retVal["Data"] = try_Conn[1]
+            return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = MFCList["Data"]
+        return retVal
+
+
+def getIgnoredWeeks(MFCList):
+    retVal = {}
+    MFCList = cleanseMFCList(MFCList)
+    if MFCList["Result"] == 1:
+        MFCList = MFCList["Data"]
+        try_Conn = returnConnection()
+        if try_Conn[0] == 1:
+            my_Conn = try_Conn[1]
+            cur = my_Conn.cursor(dictionary=True)
+            statement = "SELECT DATE_FORMAT(WeekCommencing,'%d-%b-%Y') AS WeekCommencing," \
+                        " COUNT(Location) / " + str(len(MFCList)) + " AS Included" \
+                        " FROM IgnoredWeeks WHERE Location IN (" + MFCList + ")) " \
+                        " GROUP BY WeekCommencing ORDER BY WeekCommencing"
+            try:
+                cur.execute(statement)
+                result = cur.fetchall()
+                my_Conn.close()
+                retVal["Result"] = 1
+                retVal["Data"] = json.dumps(result, default=str)
+            except mariadb.Error as e:
+                retVal["Result"] = 0
+                retVal["Data"] = str(e)
             return retVal
         else:
             retVal["Result"] = 0
