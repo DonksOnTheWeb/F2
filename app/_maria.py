@@ -1,6 +1,7 @@
 import mariadb
 import json
 import datetime
+import uuid
 
 
 def returnConnection():
@@ -168,9 +169,8 @@ def redetermineTiers():
         retVal["Data"] = try_Conn[1]
         return retVal
 
-#Called from REST API
 
-
+# Called from REST API
 def listMFCs():
     retVal = {}
     try_Conn = returnConnection()
@@ -194,7 +194,7 @@ def listMFCs():
         return retVal
 
 
-def getForecastHistory(groupAs, MFCList):
+def getOfficialForecast(groupAs, MFCList):
     retVal = {}
     MFCList = cleanseMFCList(MFCList)
     if MFCList["Result"] == 1:
@@ -205,7 +205,8 @@ def getForecastHistory(groupAs, MFCList):
             cur = my_Conn.cursor(dictionary=True)
             statement = "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
                         " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
-                        " SUM(Forecast) as Forecast FROM OfficialForecast WHERE Location IN (" + MFCList + ") Group By Asat order by OfficialForecast.Asat"
+                        " SUM(Forecast) as Forecast FROM OfficialForecast WHERE Location IN (" + MFCList + ")" \
+                                                                                                           " Group By Asat order by OfficialForecast.Asat"
             try:
                 cur.execute(statement)
                 result = cur.fetchall()
@@ -269,11 +270,53 @@ def getWorkingForecast(groupAs, MFCList):
         if try_Conn[0] == 1:
             my_Conn = try_Conn[1]
             cur = my_Conn.cursor(dictionary=True)
-            statement = "WITH window AS(SELECT *, ROW_NUMBER() OVER (PARTITION BY Location, Asat ORDER BY IO ASC) as RN from WorkingForecast) " \
-                        "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
+            # statement = "WITH window AS(SELECT *, ROW_NUMBER() OVER (PARTITION BY Location, Asat ORDER BY IO ASC) as RN from WorkingForecast) " \
+            # "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
+            # " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
+            # " sum(Forecast) as Forecast from window where" \
+            # " Location in (" + MFCList + ") AND RN = 1 Group by Asat order by window.Asat"
+            statement = "SELECT Date_format(Asat,'%d-%b-%Y') as Asat," \
                         " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
-                        " sum(Forecast) as Forecast from window where" \
-                        " Location in (" + MFCList + ") AND RN = 1 Group by Asat order by window.Asat"
+                        " sum(Forecast) as Forecast from WorkingForecast where" \
+                        " Location in (" + MFCList + ") Group by Asat order by WorkingForecast.Asat"
+
+            try:
+                cur.execute(statement)
+                result = cur.fetchall()
+                my_Conn.close()
+                retVal["Result"] = 1
+                retVal["Data"] = json.dumps(result, default=str)
+            except mariadb.Error as e:
+                retVal["Result"] = 0
+                retVal["Data"] = str(e)
+            return retVal
+        else:
+            retVal["Result"] = 0
+            retVal["Data"] = try_Conn[1]
+            return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = MFCList["Data"]
+        return retVal
+
+
+def getFilteredActuals(groupAs, MFCList):
+    retVal = {}
+    MFCList = cleanseMFCList(MFCList)
+    if MFCList["Result"] == 1:
+        MFCList = MFCList["Data"]
+
+        try_Conn = returnConnection()
+        if try_Conn[0] == 1:
+            my_Conn = try_Conn[1]
+            cur = my_Conn.cursor(dictionary=True)
+            statement = "WITH big AS (SELECT Asat, STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W') AS WeekCommencing, Location, Act" \
+                        " FROM Actuals a)" \
+                        " SELECT b.Asat, sum(b.Act) as Act FROM Big b" \
+                        " LEFT JOIN IgnoredWeeks i on i.Location = b.Location and i.WeekCommencing = b.WeekCommencing" \
+                        " WHERE i.WeekCommencing is NULL AND b.Location IN (" + MFCList + ")" \
+                        " GROUP BY Asat" \
+                        " ORDER BY Asat"
             try:
                 cur.execute(statement)
                 result = cur.fetchall()
@@ -332,13 +375,12 @@ def getActuals(groupAs, MFCList):
 
 
 def getAllActuals():
-    #Used by the fullReForecast triggered every Morning
     retVal = {}
     try_Conn = returnConnection()
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "CALL LiveActuals()"
+        statement = "CALL LiveActuals('" + MFC + "')"
         try:
             cur.execute(statement)
             result = cur.fetchall()
@@ -356,6 +398,63 @@ def getAllActuals():
 
 
 def updateWkg(MFCList, Updates):
+    retVal = {}
+    records = []
+    counter = 0
+    MFCList = cleanseMFCList(MFCList)
+    if MFCList["Result"] == 1:
+        MFCList = list(MFCList["Data"].split(","))
+        try_Conn = returnConnection()
+        if try_Conn[0] == 1:
+            my_Conn = try_Conn[1]
+            cur = my_Conn.cursor(dictionary=True)
+            insert_query = "INSERT into ForecastLoader (LoaderUUID, Asat, Location, Pcnt) values (%s, %s, %s, %s)"
+            uid = str(uuid.uuid4())
+            try:
+                for M in MFCList:
+                    for U in Updates:
+                        Dte = U['Dte']
+                        Pcnt = float(U['Pcnt'])
+                        M = M.replace("'", "").strip()
+
+                        recordEntry = (uid, Dte, M, Pcnt)
+                        records.append(recordEntry)
+
+                        counter = counter + 1
+                        if counter == 999:
+                            cur.executemany(insert_query, records)
+                            counter = 0
+                            records = []
+
+                if counter > 0:
+                    cur.executemany(insert_query, records)
+
+                my_Conn.commit()
+                print('here')
+                statement = "CALL forecastLoader('" + uid + "')"
+                cur.execute(statement)
+                my_Conn.commit()
+                my_Conn.close()
+                print('there')
+            except mariadb.Error as e:
+                retVal["Result"] = 0
+                retVal["Data"] = str(e)
+                return retVal
+
+            retVal["Result"] = 1
+            retVal["Data"] = "Success"
+            return retVal
+        else:
+            retVal["Result"] = 0
+            retVal["Data"] = try_Conn[1]
+            return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = MFCList["Data"]
+        return retVal
+
+
+def updateWkgOld(MFCList, Updates):
     retVal = {}
     MFCList = cleanseMFCList(MFCList)
     if MFCList["Result"] == 1:
@@ -401,8 +500,8 @@ def getIgnoredWeeks(MFCList, expected):
             cur = my_Conn.cursor(dictionary=True)
             statement = "SELECT DATE_FORMAT(WeekCommencing,'%d-%b-%Y') AS WeekCommencing," \
                         " 100 * (COUNT(Location) / " + str(expected) + ") AS Included" \
-                        " FROM IgnoredWeeks WHERE Location IN (" + MFCList + ") " \
-                        " GROUP BY WeekCommencing ORDER BY WeekCommencing"
+                                                                       " FROM IgnoredWeeks WHERE Location IN (" + MFCList + ") " \
+                                                                                                                            " GROUP BY WeekCommencing ORDER BY WeekCommencing"
             try:
                 cur.execute(statement)
                 result = cur.fetchall()
@@ -523,9 +622,7 @@ def delMFCList():
         return retVal
 
 
-#Load Functions:
-
-
+# Load Functions:
 def loadMFCList(new_entries):
     retVal = {}
     records = []

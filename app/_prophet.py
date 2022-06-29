@@ -2,7 +2,7 @@ import json
 import datetime
 import pandas as pd
 from prophet import Prophet
-from _maria import getAllActuals, loadDailyForecast, latestForecastDailyDate, countryFromMFC
+from _maria import getAllActuals, loadDailyForecast, latestForecastDailyDate, countryFromMFC, getFilteredActuals
 import logging
 import os
 
@@ -11,6 +11,7 @@ global debug
 debug = False
 if not debug:
     import warnings
+
     warnings.filterwarnings("ignore", message="The frame.append method is deprecated ")
 
 
@@ -22,7 +23,6 @@ class suppress_stdout_stderr(object):
        This will not suppress raised exceptions, since exceptions are printed
     to stderr just before a script exits, and after the context manager has
     exited (at least, I think that is why it lets exceptions through).
-
     '''
 
     def __init__(self):
@@ -45,12 +45,39 @@ class suppress_stdout_stderr(object):
         os.close(self.null_fds[1])
 
 
-def forecast(params):
-    df = pd.io.json.json_normalize(params.get('history'))
-    #hols = ''
-    #if ('holiday_locale' in params):
-    #    hols = params.get('holiday_locale')
-    return doForecast(df)
+def forecast(groupAs, MFCList):
+    data = getFilteredActuals(groupAs, MFCList)
+    date_format = "%d-%b-%Y"
+    retVal = {}
+    if data["Result"] == 1:
+        ts = []
+        final = []
+        actuals = data["Data"]
+        actual = json.loads(actuals)
+        for entry in actual:
+            Date = entry["Asat"]
+            Orders = entry["Act"]
+            ts.append({"ds": Date, "y": Orders})
+
+        try:
+            ctry = json.loads(countryFromMFC(MFCList[0])["Data"])[0]['Country']
+        except:
+            ctry = None
+        thisForecast = doForecast(ts, ctry)
+        localForecast = json.loads(thisForecast)
+        for entry in localForecast["data"]:
+            dte = datetime.datetime.fromtimestamp(int(entry[0]) / 1000).date()
+            dte = datetime.datetime.strftime(dte, date_format)
+            fcst = int(entry[1])
+            record = {"Asat": dte, "Forecast": fcst}
+            final.append(record)
+        retVal["Result"] = 1
+        retVal["Data"] = json.dumps(final, default=str)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = data["Data"]
+        return retVal
 
 
 def doForecast(history_json, ctry=None):
@@ -125,7 +152,7 @@ def fullReForecast(alwaysForce=0):
                             ts = int(entry[0]) / 1000
                             dte = datetime.datetime.fromtimestamp(ts).date()
                             delta = dte - today
-                            #if delta.days >= 0:
+                            # if delta.days >= 0:
                             dte = datetime.datetime.strftime(dte, date_format)
                             fcst = int(entry[1])
                             record = (creation_date, dte, MFC, fcst)

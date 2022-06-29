@@ -2,7 +2,7 @@ from flask import Flask, request
 from prophet import __version__
 from _prophet import forecast, fullReForecast
 
-from _maria import getForecastHistory, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
+from _maria import getOfficialForecast, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
 from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, redetermineTiers, ignoreWeeksOn, ignoreWeeksOff, getIgnoredWeeks
 
 from _googlePull import gSyncActuals, loadForecastOneOff
@@ -38,15 +38,15 @@ def version():
     return __version__
 
 
-@app.route("/getForecastHistoryFromDB", methods=['POST'])
-def getForecastHistoryFromDB():
+@app.route("/getOfficialForecastFromDB", methods=['POST'])
+def getOfficialForecastFromDB():
     params = request.get_json(silent=True)
     groupAs = params.get('GroupAs')
     MFC = params.get('MFC')
     MFCList = []
     for M in MFC:
         MFCList.append(M)
-    result = getForecastHistory(groupAs, MFCList)
+    result = getOfficialForecast(groupAs, MFCList)
     if result["Result"] == 0:
         logging.warning(result["Data"])
         result["Data"] = "Fail - check logs"
@@ -169,6 +169,21 @@ def loadMFCsToDB():
             result["Data"] = "Fail - check logs"
         return result
     else:
+        logging.warning(result["Data"])
+        result["Data"] = "Fail - check logs"
+    return result
+
+
+@app.route("/onTheFlyForecast", methods=['POST'])
+def onTheFlyForecast():
+    params = request.get_json(silent=True)
+    groupAs = params.get('GroupAs')
+    MFC = params.get('MFC')
+    MFCList = []
+    for M in MFC:
+        MFCList.append(M)
+    result = forecast(groupAs, MFCList)
+    if result["Result"] == 0:
         logging.warning(result["Data"])
         result["Data"] = "Fail - check logs"
     return result
