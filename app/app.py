@@ -22,12 +22,12 @@ logging.basicConfig(
 )
 
 
-logging.info("STARTING UP LOGGER")
+logging.info("STARTING UP THE LOGGER")
 
 app = Flask(__name__)
 
 
-@app.route("/")getIgnoredWeeks
+@app.route("/")
 def root():
     html = "Welcome"
     return html.format(version=__version__)
@@ -84,7 +84,7 @@ def getWeeks():
     MFCList = []
     for M in MFC:
         MFCList.append(M)
-        result = getIgnoredWeeks(MFCList)
+    result = getIgnoredWeeks(MFCList, len(MFCList))
 
     if result["Result"] == 0:
         logging.warning(result["Data"])

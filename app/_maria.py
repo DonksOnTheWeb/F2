@@ -2,6 +2,7 @@ import mariadb
 import json
 import datetime
 
+
 def returnConnection():
     f = open('db.json')
     data = json.load(f)
@@ -298,6 +299,7 @@ def getActuals(groupAs, MFCList):
     MFCList = cleanseMFCList(MFCList)
     if MFCList["Result"] == 1:
         MFCList = MFCList["Data"]
+
         try_Conn = returnConnection()
         if try_Conn[0] == 1:
             my_Conn = try_Conn[1]
@@ -388,7 +390,7 @@ def updateWkg(MFCList, Updates):
         return retVal
 
 
-def getIgnoredWeeks(MFCList):
+def getIgnoredWeeks(MFCList, expected):
     retVal = {}
     MFCList = cleanseMFCList(MFCList)
     if MFCList["Result"] == 1:
@@ -398,8 +400,8 @@ def getIgnoredWeeks(MFCList):
             my_Conn = try_Conn[1]
             cur = my_Conn.cursor(dictionary=True)
             statement = "SELECT DATE_FORMAT(WeekCommencing,'%d-%b-%Y') AS WeekCommencing," \
-                        " COUNT(Location) / " + str(len(MFCList)) + " AS Included" \
-                        " FROM IgnoredWeeks WHERE Location IN (" + MFCList + ")) " \
+                        " 100 * (COUNT(Location) / " + str(expected) + ") AS Included" \
+                        " FROM IgnoredWeeks WHERE Location IN (" + MFCList + ") " \
                         " GROUP BY WeekCommencing ORDER BY WeekCommencing"
             try:
                 cur.execute(statement)
