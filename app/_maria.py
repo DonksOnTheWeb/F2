@@ -147,14 +147,14 @@ def deleteOldDailyForecasts():
         return retVal
 
 
-def redetermineTiers():
+def weeklyBatch():
     retVal = {}
     try_Conn = returnConnection()
 
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "call DetermineTier()"
+        statement = "call weeklyBatch()"
         try:
             cur.execute(statement)
             my_Conn.close()
@@ -380,7 +380,7 @@ def getAllActuals():
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "CALL LiveActuals()"
+        statement = "CALL liveActuals()"
         try:
             cur.execute(statement)
             result = cur.fetchall()

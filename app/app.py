@@ -3,7 +3,7 @@ from prophet import __version__
 from _prophet import forecast, fullReForecast
 
 from _maria import getOfficialForecast, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
-from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, redetermineTiers, ignoreWeeksOn, ignoreWeeksOff
+from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, weeklyBatch, ignoreWeeksOn, ignoreWeeksOff
 from _maria import getWeeksMatrix, getIgnoredWeeksForMFCs
 
 from _googlePull import gSyncActuals, loadForecastOneOff
@@ -215,7 +215,7 @@ deleteOldDailyForecasts()
 logging.info("Performing full re-forcast...")
 fullReForecast()
 logging.info("Re-determining Tiers (if Monday)")
-redetermineTiers()
+weeklyBatch()
 logging.info("One-off forecast history load disabled")
 #loadForecastOneOff()
 logging.info("Done")
