@@ -454,42 +454,30 @@ def updateWkg(MFCList, Updates):
         return retVal
 
 
-def updateWkgOld(MFCList, Updates):
+def getWeeksMatrix():
     retVal = {}
-    MFCList = cleanseMFCList(MFCList)
-    if MFCList["Result"] == 1:
-        MFCList = list(MFCList["Data"].split(","))
-        try_Conn = returnConnection()
-        if try_Conn[0] == 1:
-            my_Conn = try_Conn[1]
-            cur = my_Conn.cursor(dictionary=True)
-            for M in MFCList:
-                for U in Updates:
-                    Dte = U['Dte']
-                    Pcnt = U['Pcnt']
-                    try:
-                        statement = "CALL loadForecast('" + Dte + "', " + M + ", " + str(Pcnt) + ")"
-                        cur.execute(statement)
-                        my_Conn.commit()
-                    except mariadb.Error as e:
-                        print(e)
-                        retVal["Result"] = 0
-                        retVal["Data"] = str(e)
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        statement = "SELECT * FROM IgnoredWeeks ORDER BY WeekCommencing, Location"
+        try:
+            cur.execute(statement)
+            result = cur.fetchall()
             my_Conn.close()
             retVal["Result"] = 1
-            retVal["Data"] = "Success"
-            return retVal
-        else:
+            retVal["Data"] = json.dumps(result, default=str)
+        except mariadb.Error as e:
             retVal["Result"] = 0
-            retVal["Data"] = try_Conn[1]
-            return retVal
+            retVal["Data"] = str(e)
+        return retVal
     else:
         retVal["Result"] = 0
-        retVal["Data"] = MFCList["Data"]
+        retVal["Data"] = try_Conn[1]
         return retVal
 
 
-def getIgnoredWeeks(MFCList, expected):
+def getIgnoredWeeksForMFCs(MFCList, expected):
     retVal = {}
     MFCList = cleanseMFCList(MFCList)
     if MFCList["Result"] == 1:
@@ -500,8 +488,8 @@ def getIgnoredWeeks(MFCList, expected):
             cur = my_Conn.cursor(dictionary=True)
             statement = "SELECT DATE_FORMAT(WeekCommencing,'%d-%b-%Y') AS WeekCommencing," \
                         " 100 * (COUNT(Location) / " + str(expected) + ") AS Included" \
-                                                                       " FROM IgnoredWeeks WHERE Location IN (" + MFCList + ") " \
-                                                                                                                            " GROUP BY WeekCommencing ORDER BY WeekCommencing"
+                        " FROM IgnoredWeeks WHERE Location IN (" + MFCList + ") " \
+                        " GROUP BY WeekCommencing ORDER BY WeekCommencing"
             try:
                 cur.execute(statement)
                 result = cur.fetchall()

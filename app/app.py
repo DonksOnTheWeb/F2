@@ -3,7 +3,8 @@ from prophet import __version__
 from _prophet import forecast, fullReForecast
 
 from _maria import getOfficialForecast, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
-from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, redetermineTiers, ignoreWeeksOn, ignoreWeeksOff, getIgnoredWeeks
+from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, redetermineTiers, ignoreWeeksOn, ignoreWeeksOff
+from _maria import getWeeksMatrix, getIgnoredWeeksForMFCs
 
 from _googlePull import gSyncActuals, loadForecastOneOff
 
@@ -84,7 +85,17 @@ def getWeeks():
     MFCList = []
     for M in MFC:
         MFCList.append(M)
-    result = getIgnoredWeeks(MFCList, len(MFCList))
+    result = getIgnoredWeeksForMFCs(MFCList, len(MFCList))
+
+    if result["Result"] == 0:
+        logging.warning(result["Data"])
+        result["Data"] = "Fail - check logs"
+    return result
+
+
+@app.route("/getWeeksOverview", methods=['GET'])
+def getWeeksOverview():
+    result = getWeeksMatrix()
 
     if result["Result"] == 0:
         logging.warning(result["Data"])
