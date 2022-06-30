@@ -3,7 +3,7 @@ import datetime
 import pandas as pd
 from prophet import Prophet
 from _maria import getAllActuals, loadDailyForecast, latestForecastDailyDate, countryFromMFC, getFilteredActuals
-import logging
+from loghandler import logger
 import os
 
 global debug
@@ -113,7 +113,7 @@ def fullReForecast(alwaysForce=0):
         delta = today - lastForecast
 
         if delta.days == 0 and alwaysForce == 0:
-            logging.info("Already performed a forecast for today.")
+            logger('I', "Already performed a forecast for today.")
         else:
             data = getAllActuals()
             date_format = "%Y-%m-%d"
@@ -162,14 +162,14 @@ def fullReForecast(alwaysForce=0):
 
                 load = loadDailyForecast(new_entries)
                 if load["Result"] == 1:
-                    logging.info("Loaded " + str(load["Data"]) + " records into daily forecast table.")
+                    logger('I', "Loaded " + str(load["Data"]) + " records into daily forecast table.")
                     if len(failed) > 0:
-                        logging.info("Note - Forecast failed for following list: - " + str(failed))
+                        logger('I', "Note - Forecast failed for following list: - " + str(failed))
 
             else:
-                logging.warning("Failed to get latest actual data - ")
-                logging.warning(data["Data"])
+                logger('W', "Failed to get latest actual data - ")
+                logger('W', data["Data"])
     else:
-        logging.warning('')
-        logging.warning(str(result["Data"]))
-        logging.warning('')
+        logger('W', '')
+        logger('W', str(result["Data"]))
+        logger('W', '')

@@ -5,7 +5,7 @@ import json
 from hashlib import sha256
 
 from _maria import loadActuals, latestActualDate, loadForecast
-import logging
+from loghandler import logger
 
 
 def readFrom(sheetname, cols=None):
@@ -58,8 +58,8 @@ def checkDaily(ctry, lastEntry):
     if haveLoaded:
         finalStr = "Loaded " + str(loaded["Data"]) + " records.  Includes attempted re-load of last 5 days"
 
-    logging.info(finalStr)
-    logging.info("Latest file date found for " + ctry + " is " + datetime.datetime.strftime(latestFileDate, date_format))
+    logger('I', finalStr)
+    logger('I', "Latest file date found for " + ctry + " is " + datetime.datetime.strftime(latestFileDate, date_format))
     retVal["Result"] = 1
     retVal["Data"] = loaded
     return retVal
@@ -74,20 +74,20 @@ def gSyncActuals(countries):
         if data["latest"] is not None:
             final = data["latest"]
 
-        logging.info("Last DB entry is " + final)
+        logger('I', "Last DB entry is " + final)
         lastEntry = datetime.datetime.strptime(final, date_format).date()
 
         for ctry in countries:
             localReturn = checkDaily(ctry, lastEntry)
             if localReturn["Result"] == 0:
-                logging.warning('')
-                logging.warning(str(localReturn["Data"]))
-                logging.warning('')
+                logger('W', '')
+                logger('W', str(localReturn["Data"]))
+                logger('W', '')
                 break
     else:
-        logging.warning('')
-        logging.warning(str(result["Data"]))
-        logging.warning('')
+        logger('W', '')
+        logger('W', str(result["Data"]))
+        logger('W', '')
 
 
 def buildMFCLookup():
@@ -122,4 +122,4 @@ def loadForecastOneOff():
 
     loadForecast(new_entries)
     print(len(new_entries))
-    logging.info("Loaded forecast data")
+    logger('I', "Loaded forecast data")

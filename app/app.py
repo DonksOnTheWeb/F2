@@ -7,7 +7,7 @@ from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, 
 from _maria import getWeeksMatrix, getIgnoredWeeksForMFCs
 
 from _googlePull import gSyncActuals, loadForecastOneOff
-
+from loghandler import logger
 import logging
 
 from datetime import datetime
@@ -23,7 +23,7 @@ logging.basicConfig(
 )
 
 
-logging.info("STARTING UP THE LOGGER")
+logger('I', "STARTING UP THE LOGGER")
 
 app = Flask(__name__)
 
@@ -49,7 +49,7 @@ def getOfficialForecastFromDB():
         MFCList.append(M)
     result = getOfficialForecast(groupAs, MFCList)
     if result["Result"] == 0:
-        logging.warning(result["Data"])
+        logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
@@ -58,7 +58,7 @@ def getOfficialForecastFromDB():
 def listMFCsFromDB():
     result = listMFCs()
     if result["Result"] == 0:
-        logging.warning(result["Data"])
+        logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
@@ -73,7 +73,7 @@ def getWorkingForecastFromDB():
         MFCList.append(M)
     result = getWorkingForecast(groupAs, MFCList)
     if result["Result"] == 0:
-        logging.warning(result["Data"])
+        logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
@@ -88,7 +88,7 @@ def getWeeks():
     result = getIgnoredWeeksForMFCs(MFCList, len(MFCList))
 
     if result["Result"] == 0:
-        logging.warning(result["Data"])
+        logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
@@ -98,7 +98,7 @@ def getWeeksOverview():
     result = getWeeksMatrix()
 
     if result["Result"] == 0:
-        logging.warning(result["Data"])
+        logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
@@ -118,7 +118,7 @@ def toggleIgnoredWeeks():
         result = ignoreWeeksOff(MFCList, WeekCommencing)
 
     if result["Result"] == 0:
-        logging.warning(result["Data"])
+        logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
@@ -133,7 +133,7 @@ def updateWorkingForecast():
     Updates = params.get('Updates')
     result = updateWkg(MFCList, Updates)
     if result["Result"] == 0:
-        logging.warning(result["Data"])
+        logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
@@ -148,7 +148,7 @@ def getLatestForecastDailyFromDB():
         MFCList.append(M)
     result = getLatestForecastDaily(groupAs, MFCList)
     if result["Result"] == 0:
-        logging.warning(result["Data"])
+        logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
@@ -163,7 +163,7 @@ def getActualsFromDB():
         MFCList.append(M)
     result = getActuals(groupAs, MFCList)
     if result["Result"] == 0:
-        logging.warning(result["Data"])
+        logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
@@ -176,11 +176,11 @@ def loadMFCsToDB():
     if result["Result"] == 1:
         result = loadMFCList(MFCs)
         if result["Result"] == 0:
-            logging.warning(result["Data"])
+            logger('W', result["Data"])
             result["Data"] = "Fail - check logs"
         return result
     else:
-        logging.warning(result["Data"])
+        logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
@@ -195,7 +195,7 @@ def onTheFlyForecast():
         MFCList.append(M)
     result = forecast(groupAs, MFCList)
     if result["Result"] == 0:
-        logging.warning(result["Data"])
+        logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
     return result
 
@@ -208,18 +208,17 @@ def makeForecast():
     return str(cut_Down.to_json(orient='split'))
 
 
-logging.info("Server awake - checking actuals...")
+logger('I', "Server awake - checking actuals...")
 gSyncActuals(['UK', 'ES', 'FR'])
-logging.info("Clearing old forecasts...")
+logger('I', "Clearing old forecasts...")
 deleteOldDailyForecasts()
-logging.info("Performing full re-forcast...")
+logger('I', "Performing full re-forcast...")
 fullReForecast()
-logging.info("Re-determining Tiers (if Monday)")
+logger('I', "Re-determining Tiers (if Monday)")
 weeklyBatch()
-logging.info("One-off forecast history load disabled")
+logger('I', "One-off forecast history load disabled")
 #loadForecastOneOff()
-logging.info("Done")
-print("Done")
+logger('I', "Done")
 
 if __name__ == "__main__":
     app.run()
