@@ -3,8 +3,8 @@ from prophet import __version__
 from _prophet import forecast, fullReForecast
 
 from _maria import getOfficialForecast, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
-from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, weeklyBatch, ignoreWeeksOn, ignoreWeeksOff
-from _maria import getWeeksMatrix, getIgnoredWeeksForMFCs
+from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, determineTiers, ignoreWeeksOn, ignoreWeeksOff
+from _maria import getWeeksMatrix, getIgnoredWeeksForMFCs, copyToWorking, submitForecast
 
 from _googlePull import gSyncActuals, loadForecastOneOff
 from loghandler import logger
@@ -153,6 +153,18 @@ def getLatestForecastDailyFromDB():
     return result
 
 
+@app.route("/submitForecast", methods=['POST'])
+def submitForecastToDB():
+    params = request.get_json(silent=True)
+    ctry = params.get('Country')
+    InOff = params.get('IO')
+    result = submitForecast(ctry, InOff)
+    if result["Result"] == 0:
+        logger('W', result["Data"])
+        result["Data"] = "Fail - check logs"
+    return result
+
+
 @app.route("/getActualsFromDB", methods=['POST'])
 def getActualsFromDB():
     params = request.get_json(silent=True)
@@ -214,8 +226,12 @@ logger('I', "Clearing old forecasts...")
 deleteOldDailyForecasts()
 logger('I', "Performing full re-forcast...")
 fullReForecast()
-logger('I', "Re-determining Tiers (if Monday)")
-weeklyBatch()
+if datetime.today().weekday() == 0:
+    logger('I', "It's Monday ... Re-determining Tiers")
+    determineTiers()
+    logger('I', "It's Monday ... Copying last forecasts to Working")
+    copyToWorking()
+
 logger('I', "One-off forecast history load disabled")
 #loadForecastOneOff()
 logger('I', "Done")

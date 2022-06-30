@@ -7,7 +7,6 @@ import uuid
 def returnConnection():
     f = open('db.json')
     data = json.load(f)
-
     try:
         conn = mariadb.connect(
             user=data["user"],
@@ -19,7 +18,6 @@ def returnConnection():
         retVal = (1, conn)
     except mariadb.Error as e:
         retVal = (0, str(e))
-
     return retVal
 
 
@@ -134,6 +132,7 @@ def deleteOldDailyForecasts():
         last_week = (last_week,)
         try:
             cur.execute(statement, last_week)
+            my_Conn.commit()
             my_Conn.close()
             retVal["Result"] = 1
             retVal["Data"] = json.dumps("Success", default=str)
@@ -147,16 +146,67 @@ def deleteOldDailyForecasts():
         return retVal
 
 
-def weeklyBatch():
+def copyToWorking():
     retVal = {}
     try_Conn = returnConnection()
 
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "call weeklyBatch()"
+        statement = "call copyToWorking()"
         try:
             cur.execute(statement)
+            my_Conn.commit()
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = json.dumps("Success", default=str)
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal
+
+
+def determineTiers():
+    retVal = {}
+    try_Conn = returnConnection()
+
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        statement = "call determineTiers()"
+        try:
+            cur.execute(statement)
+            my_Conn.commit()
+            my_Conn.close()
+            retVal["Result"] = 1
+            retVal["Data"] = json.dumps("Success", default=str)
+        except mariadb.Error as e:
+            retVal["Result"] = 0
+            retVal["Data"] = str(e)
+        return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = try_Conn[1]
+        return retVal
+
+
+def submitForecast(ctry, InOff):
+    retVal = {}
+    try_Conn = returnConnection()
+
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        statement = "call submitOfficial(" + ctry + ")"
+        if InOff == 'I':
+            statement = "call submitIntra(" + ctry + ")"
+        try:
+            cur.execute(statement)
+            my_Conn.commit()
             my_Conn.close()
             retVal["Result"] = 1
             retVal["Data"] = json.dumps("Success", default=str)
