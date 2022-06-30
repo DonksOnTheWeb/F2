@@ -20,6 +20,7 @@ RUN pip3 install --upgrade --no-cache-dir google-api-python-client
 RUN pip3 install --upgrade --no-cache-dir pytz
 
 ENV PYTHONUNBUFFERED=1
+ENV TZ="Europe/Luxembourg"
 
 COPY gunicorn_config.py /deploy/gunicorn_config.py
 COPY ./app /deploy/app
