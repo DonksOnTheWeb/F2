@@ -380,7 +380,7 @@ def getAllActuals():
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "CALL LiveActuals('" + MFC + "')"
+        statement = "CALL LiveActuals()"
         try:
             cur.execute(statement)
             result = cur.fetchall()

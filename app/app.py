@@ -208,6 +208,7 @@ redetermineTiers()
 logging.info("One-off forecast history load disabled")
 #loadForecastOneOff()
 logging.info("Done")
+print("Done")
 
 if __name__ == "__main__":
     app.run()
