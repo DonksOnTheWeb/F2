@@ -239,7 +239,7 @@ if OneOffLoaf:
     logger('I', "One-off forecast history load")
     loadForecastOneOff()
 
-logger('I', "Done")
+logger('I', "Startup Done")
 
 if __name__ == "__main__":
     app.run()
