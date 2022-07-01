@@ -158,7 +158,9 @@ def submitForecastToDB():
     params = request.get_json(silent=True)
     ctry = params.get('Country')
     InOff = params.get('IO')
+    logger('I', "Submitting " + InOff + "")
     result = submitForecast(ctry, InOff)
+
     if result["Result"] == 0:
         logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
@@ -232,8 +234,11 @@ if datetime.today().weekday() == 0:
     logger('I', "It's Monday ... Copying last forecasts to Working")
     copyToWorking()
 
-logger('I', "One-off forecast history load disabled")
-#loadForecastOneOff()
+OneOffLoaf = False
+if OneOffLoaf:
+    logger('I', "One-off forecast history load")
+    loadForecastOneOff()
+
 logger('I', "Done")
 
 if __name__ == "__main__":

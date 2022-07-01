@@ -135,7 +135,7 @@ def deleteOldDailyForecasts():
             my_Conn.commit()
             my_Conn.close()
             retVal["Result"] = 1
-            retVal["Data"] = json.dumps("Success", default=str)
+            retVal["Data"] = json.dumps('Success', default=str)
         except mariadb.Error as e:
             retVal["Result"] = 0
             retVal["Data"] = str(e)
@@ -159,7 +159,7 @@ def copyToWorking():
             my_Conn.commit()
             my_Conn.close()
             retVal["Result"] = 1
-            retVal["Data"] = json.dumps("Success", default=str)
+            retVal["Data"] = json.dumps('Success', default=str)
         except mariadb.Error as e:
             retVal["Result"] = 0
             retVal["Data"] = str(e)
@@ -183,7 +183,7 @@ def determineTiers():
             my_Conn.commit()
             my_Conn.close()
             retVal["Result"] = 1
-            retVal["Data"] = json.dumps("Success", default=str)
+            retVal["Data"] = json.dumps('Success', default=str)
         except mariadb.Error as e:
             retVal["Result"] = 0
             retVal["Data"] = str(e)
@@ -201,15 +201,15 @@ def submitForecast(ctry, InOff):
     if try_Conn[0] == 1:
         my_Conn = try_Conn[1]
         cur = my_Conn.cursor(dictionary=True)
-        statement = "call submitOfficial(" + ctry + ")"
+        statement = "call submitOfficial('" + ctry + "')"
         if InOff == 'I':
-            statement = "call submitIntra(" + ctry + ")"
+            statement = "call submitIntra('" + ctry + "')"
         try:
             cur.execute(statement)
             my_Conn.commit()
             my_Conn.close()
             retVal["Result"] = 1
-            retVal["Data"] = json.dumps("Success", default=str)
+            retVal["Data"] = json.dumps('Success', default=str)
         except mariadb.Error as e:
             retVal["Result"] = 0
             retVal["Data"] = str(e)
@@ -492,7 +492,7 @@ def updateWkg(MFCList, Updates):
                 return retVal
 
             retVal["Result"] = 1
-            retVal["Data"] = "Success"
+            retVal["Data"] = 'Success'
             return retVal
         else:
             retVal["Result"] = 0
@@ -591,7 +591,7 @@ def ignoreWeeksOn(MFCList, WeekCommencing):
                 my_Conn.commit()
                 my_Conn.close()
                 retVal["Result"] = 1
-                retVal["Data"] = "Success"
+                retVal["Data"] = 'Success'
             except mariadb.Error as e:
                 retVal["Result"] = 0
                 retVal["Data"] = str(e)
@@ -622,7 +622,7 @@ def ignoreWeeksOff(MFCList, WeekCommencing):
                 my_Conn.commit()
                 my_Conn.close()
                 retVal["Result"] = 1
-                retVal["Data"] = "Success"
+                retVal["Data"] = 'Success'
             except mariadb.Error as e:
                 retVal["Result"] = 0
                 retVal["Data"] = str(e)
@@ -689,7 +689,7 @@ def loadMFCList(new_entries):
             my_Conn.commit()
             my_Conn.close()
             retVal["Result"] = 1
-            retVal["Data"] = "Success"
+            retVal["Data"] = 'Success'
         except mariadb.Error as e:
             retVal["Result"] = 0
             retVal["Data"] = str(e)
@@ -783,6 +783,36 @@ def loadDailyForecast(new_entries):
         return retVal
 
 
+def loadForecastWrapper(new_entries):
+    deleteForecasts()
+    loadForecast(new_entries)
+    copyOfficial()
+
+
+def deleteForecasts():
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor()
+        cur.execute("Delete from OfficialForecast")
+        my_Conn.commit()
+        cur.execute("Delete from WorkingForecast")
+        my_Conn.commit()
+        cur.execute("Delete from IntraForecast")
+        my_Conn.commit()
+        my_Conn.close()
+
+
+def copyOfficial():
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor()
+        cur.execute("INSERT INTO WorkingForecast SELECT * FROM OfficialForecast")
+        my_Conn.commit()
+        my_Conn.close()
+
+
 def loadForecast(new_entries):
     records = []
     counter = 0
@@ -807,6 +837,5 @@ def loadForecast(new_entries):
 
         if counter > 0:
             cur.executemany(insert_query, records)
-
         my_Conn.commit()
         my_Conn.close()

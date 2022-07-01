@@ -4,7 +4,7 @@ import datetime
 import json
 from hashlib import sha256
 
-from _maria import loadActuals, latestActualDate, loadForecast
+from _maria import loadActuals, latestActualDate, loadForecastWrapper
 from loghandler import logger
 
 
@@ -120,6 +120,6 @@ def loadForecastOneOff():
         record = (dte, MFC, fcst)
         new_entries.append(record)
 
-    loadForecast(new_entries)
+    loadForecastWrapper(new_entries)
     print(len(new_entries))
     logger('I', "Loaded forecast data")
