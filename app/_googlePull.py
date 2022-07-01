@@ -4,8 +4,77 @@ import datetime
 import json
 from hashlib import sha256
 
-from _maria import loadActuals, latestActualDate, loadForecastWrapper
+from _maria import loadActuals, latestActualDate, loadForecastWrapper, getFullForecast
 from loghandler import logger
+
+
+def writeForecastToSheet(ctry, InOff):
+    result = getFullForecast(ctry, InOff)
+    result = json.loads(result["Data"])
+    result = writeTo(ctry, result, InOff)
+    return result
+
+
+def writeTo(ctry, jsonData, inOff):
+    retVal = {}
+    try:
+        SERVICE_ACCOUNT_FILE = 'keys.json'
+        SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+
+        creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+
+        # The ID and range of a sample spreadsheet.
+        spreadsheet_id = '1vDUg9kZD__YDcjkkeeycxeykkD5Oz0nLIRpOc4i2ww8'
+        service = build('sheets', 'v4', credentials=creds)
+
+        # Call the Sheets API
+        sheet = service.spreadsheets()
+        if inOff == 'O':
+            clearRange = ctry + "!A:C"
+            headersRange = ctry + "!A1:C2"
+            dataRange = ctry + '!A3:C' + str(len(jsonData) + 2)
+            tsRange = ctry + "!J2:K2"
+            values = [
+                ['OFFICIAL', '', ''],
+                ['Date', 'Location', 'Forecast'],
+            ]
+        else:
+            clearRange = ctry + "!E:G"
+            headersRange = ctry + "!E1:G2"
+            dataRange = ctry + '!E3:G' + str(len(jsonData) + 2)
+            tsRange = ctry + "!J3:K3"
+            values = [
+                ['INTRA', '', ''],
+                ['Date', 'Location', 'Forecast'],
+            ]
+
+        # First clear existing
+        sheet.values().clear(spreadsheetId=spreadsheet_id, range=clearRange).execute()
+
+        #Now the headers
+        data = {'values': values}
+        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=headersRange, valueInputOption='USER_ENTERED').execute()
+
+        # Now the full data
+        values = []
+        for entry in jsonData:
+            values.append([entry['Asat'], entry['Location'], entry['Forecast']])
+
+        data = {'values': values}
+        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=dataRange, valueInputOption='USER_ENTERED').execute()
+        # Then the timestamp
+        timestamp = datetime.datetime.now().strftime("%d-%b-%Y, %H:%M:%S")
+        values = [
+            [timestamp, len(jsonData)]
+        ]
+        data = {'values': values}
+        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=tsRange, valueInputOption='USER_ENTERED').execute()
+        retVal["Result"] = 1
+        retVal["Data"] = "Success"
+    except:
+        retVal["Result"] = 0
+        retVal["Data"] = "Error in WriteTo gsheets function"
+    return retVal
 
 
 def readFrom(sheetname, cols=None):
@@ -15,7 +84,7 @@ def readFrom(sheetname, cols=None):
     creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 
     # The ID and range of a sample spreadsheet.
-    SAMPLE_SPREADSHEET_ID = '1JQH_br1-_wSTQec0hr6OKJb1AKZYdwLf2vKVjpXWjWs'
+    spreadsheet_id = '1JQH_br1-_wSTQec0hr6OKJb1AKZYdwLf2vKVjpXWjWs'
 
     service = build('sheets', 'v4', credentials=creds)
 
@@ -25,7 +94,7 @@ def readFrom(sheetname, cols=None):
         cols = "!A:C"
 
     sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=SAMPLE_SPREADSHEET_ID, range=sheetname + cols).execute()
+    result = sheet.values().get(spreadsheetId=spreadsheet_id, range=sheetname + cols).execute()
     values = result.get('values', [])
 
     return values
@@ -121,5 +190,4 @@ def loadForecastOneOff():
         new_entries.append(record)
 
     loadForecastWrapper(new_entries)
-    print(len(new_entries))
-    logger('I', "Loaded forecast data")
+    logger('I', "Loaded forecast data - " + strlen(new_entries)) + " entries.")

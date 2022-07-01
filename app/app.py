@@ -4,16 +4,17 @@ from _prophet import forecast, fullReForecast
 
 from _maria import getOfficialForecast, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
 from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, determineTiers, ignoreWeeksOn, ignoreWeeksOff
-from _maria import getWeeksMatrix, getIgnoredWeeksForMFCs, copyToWorking, submitForecast
+from _maria import getWeeksMatrix, getIgnoredWeeksForMFCs, copyToWorking, submitForecast, getFullForecast
 
-from _googlePull import gSyncActuals, loadForecastOneOff
+from _googlePull import gSyncActuals, loadForecastOneOff, writeForecastToSheet
 from loghandler import logger
 import logging
 
 from datetime import datetime
+
 now = datetime.now()
 dtNow = now.strftime("%d-%b-%Y")
-#logging.basicConfig(filename='../logs/' + dtNow + '.log', level=logging.INFO)
+# logging.basicConfig(filename='../logs/' + dtNow + '.log', level=logging.INFO)
 
 logging.basicConfig(
     filename='../logs/' + dtNow + '.log',
@@ -21,7 +22,6 @@ logging.basicConfig(
     format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
 )
-
 
 logger('I', "STARTING UP THE LOGGER")
 
@@ -164,6 +164,10 @@ def submitForecastToDB():
     if result["Result"] == 0:
         logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
+    else:
+        # Upload To Google
+        result = writeForecastToSheet(ctry, InOff)
+
     return result
 
 

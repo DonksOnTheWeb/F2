@@ -3,7 +3,7 @@ from datetime import datetime
 
 
 def logger(lvl, msg):
-    timestamp = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+    timestamp = datetime.now().strftime("%d-%b-%Y, %H:%M:%S")
     if lvl == 'W':
         logging.warning(msg)
         print(timestamp + ' : WARN : ' + msg)
