@@ -190,4 +190,5 @@ def loadForecastOneOff():
         new_entries.append(record)
 
     loadForecastWrapper(new_entries)
-    logger('I', "Loaded forecast data - " + strlen(new_entries)) + " entries.")
+    logger('I', "Loaded forecast data - " + str(len(new_entries)) + " entries.")
+
