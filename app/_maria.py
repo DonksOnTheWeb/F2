@@ -244,7 +244,7 @@ def listMFCs():
         return retVal
 
 
-def getFullForecast(ctry, InOff):
+def getFullForecast(ctry, InOff):  # IS THIS USED???
     retVal = {}
     try_Conn = returnConnection()
     if try_Conn[0] == 1:
@@ -254,7 +254,7 @@ def getFullForecast(ctry, InOff):
                     " AND Asat >= DATE_ADD(DATE(DATE_ADD(NOW(), INTERVAL(-WEEKDAY(NOW())) DAY)) , INTERVAL 7 DAY) order by Location, Asat"
         if InOff == 'I':
             statement = "SELECT * from IntraForecast where Location in (select Location from Locations where Country = '" + ctry + "')" \
-                        " AND Asat > DATE(NOW()) order by Location, Asat"
+                    " AND Asat > DATE(NOW()) order by Location, Asat"
         try:
             cur.execute(statement)
             result = cur.fetchall()
@@ -284,6 +284,47 @@ def getOfficialForecast(groupAs, MFCList):
                         " DATE_FORMAT(DATE_ADD(Asat, INTERVAL - WEEKDAY(Asat) DAY), '%d-%b-%Y') AS Commencing," \
                         " SUM(Forecast) as Forecast FROM OfficialForecast WHERE Location IN (" + MFCList + ")" \
                         " Group By Asat order by OfficialForecast.Asat"
+            try:
+                cur.execute(statement)
+                result = cur.fetchall()
+                my_Conn.close()
+                retVal["Result"] = 1
+                retVal["Data"] = json.dumps(result, default=str)
+            except mariadb.Error as e:
+                retVal["Result"] = 0
+                retVal["Data"] = str(e)
+            return retVal
+        else:
+            retVal["Result"] = 0
+            retVal["Data"] = try_Conn[1]
+            return retVal
+    else:
+        retVal["Result"] = 0
+        retVal["Data"] = MFCList["Data"]
+        return retVal
+
+
+def unGrouped(MFCList, table):
+    retVal = {}
+    MFCList = cleanseMFCList(MFCList)
+    if MFCList["Result"] == 1:
+        MFCList = MFCList["Data"]
+
+        try_Conn = returnConnection()
+        if try_Conn[0] == 1:
+            my_Conn = try_Conn[1]
+            cur = my_Conn.cursor(dictionary=True)
+            statement = "SELECT STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W') AS WeekCommencing, Location, SUM(Act) AS Act" \
+                        " FROM Actuals WHERE Location IN (" + MFCList + ")" \
+                        " GROUP BY STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'), Location" \
+                        " ORDER BY Location, STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W')"
+
+            if "Forecast" in table:
+                statement = "SELECT STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W') AS WeekCommencing, Location, SUM(Forecast) AS Forecast"\
+                        " FROM " + table + " WHERE Location IN (" + MFCList + ")" \
+                        " GROUP BY STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'), Location" \
+                        " ORDER BY Location, STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W')"
+            print(statement)
             try:
                 cur.execute(statement)
                 result = cur.fetchall()
@@ -392,8 +433,7 @@ def getFilteredActuals(groupAs, MFCList):
                         " SELECT b.Asat, sum(b.Act) as Act FROM Big b" \
                         " LEFT JOIN IgnoredWeeks i on i.Location = b.Location and i.WeekCommencing = b.WeekCommencing" \
                         " WHERE i.WeekCommencing is NULL AND b.Location IN (" + MFCList + ")" \
-                        " GROUP BY Asat" \
-                        " ORDER BY Asat"
+                        " GROUP BY Asat ORDER BY Asat"
             try:
                 cur.execute(statement)
                 result = cur.fetchall()

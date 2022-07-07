@@ -4,7 +4,7 @@ from _prophet import forecast, fullReForecast
 
 from _maria import getOfficialForecast, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
 from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, determineTiers, ignoreWeeksOn, ignoreWeeksOff
-from _maria import getWeeksMatrix, getIgnoredWeeksForMFCs, copyToWorking, submitForecast, getFullForecast
+from _maria import getWeeksMatrix, getIgnoredWeeksForMFCs, copyToWorking, submitForecast, unGrouped
 
 from _googlePull import gSyncActuals, loadForecastOneOff, writeForecastToSheet
 from loghandler import logger
@@ -171,6 +171,21 @@ def submitForecastToDB():
     return result
 
 
+@app.route("/getUngrouped", methods=['POST'])
+def getUngroupedFromDB():
+    params = request.get_json(silent=True)
+    MFC = params.get('MFC')
+    table = params.get('Table')
+    MFCList = []
+    for M in MFC:
+        MFCList.append(M)
+    result = unGrouped(MFCList, table)
+    if result["Result"] == 0:
+        logger('W', result["Data"])
+        result["Data"] = "Fail - check logs"
+    return result
+
+
 @app.route("/getActualsFromDB", methods=['POST'])
 def getActualsFromDB():
     params = request.get_json(silent=True)
@@ -218,12 +233,12 @@ def onTheFlyForecast():
     return result
 
 
-@app.route("/makeForecast", methods=['POST'])
-def makeForecast():
-    params = request.get_json(silent=True)
-    result = forecast(params)
-    cut_Down = result[['ds', 'yhat']]
-    return str(cut_Down.to_json(orient='split'))
+#@app.route("/makeForecast", methods=['POST'])
+#def makeForecast():
+#    params = request.get_json(silent=True)
+#    result = forecast(params)
+#    cut_Down = result[['ds', 'yhat']]
+#    return str(cut_Down.to_json(orient='split'))
 
 
 logger('I', "Server is now awake - checking actuals...")
