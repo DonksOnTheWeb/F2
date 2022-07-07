@@ -94,10 +94,7 @@ def doForecast(history_json, ctry=None):
     else:
         with suppress_stdout_stderr():
             m.fit(df)
-    logger('I', 'Making forecast for:')
-    logger('I', history_json)
     future = m.make_future_dataframe(140)
-    logger('I', 'Done')
     return str(m.predict(future)[['ds', 'yhat']].to_json(orient='split'))
 
 

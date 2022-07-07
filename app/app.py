@@ -226,7 +226,7 @@ def makeForecast():
     return str(cut_Down.to_json(orient='split'))
 
 
-logger('I', "Server now awake - checking actuals...")
+logger('I', "Server is now awake - checking actuals...")
 gSyncActuals(['UK', 'ES', 'FR'])
 logger('I', "Clearing old forecasts...")
 deleteOldDailyForecasts()
