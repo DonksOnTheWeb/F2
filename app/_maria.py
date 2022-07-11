@@ -314,14 +314,18 @@ def unGrouped(MFCList, table):
         if try_Conn[0] == 1:
             my_Conn = try_Conn[1]
             cur = my_Conn.cursor(dictionary=True)
-            statement = "SELECT STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W') AS WeekCommencing, Location, SUM(Act) AS Act" \
-                        " FROM Actuals WHERE Location IN (" + MFCList + ")" \
+
+            statement = "SELECT Date_Format(STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'), '%d-%b-%Y') AS WeekCommencing, Location, SUM(Act) AS Act" \
+                        " FROM Actuals" \
+                        " WHERE DATEDIFF(STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'),STR_TO_DATE(CONCAT(YEARWEEK(NOW(), 1),'Monday'), '%x%v %W')) >= -28" \
+                        " AND Location IN (" + MFCList + ")" \
                         " GROUP BY STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'), Location" \
                         " ORDER BY Location, STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W')"
-
             if "Forecast" in table:
-                statement = "SELECT STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W') AS WeekCommencing, Location, SUM(Forecast) AS Forecast"\
-                        " FROM " + table + " WHERE Location IN (" + MFCList + ")" \
+                statement = "SELECT Date_Format(STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'), '%d-%b-%Y') AS WeekCommencing, Location, SUM(Forecast) AS Forecast"\
+                        " FROM " + table +  \
+                        " WHERE DATEDIFF(STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'),STR_TO_DATE(CONCAT(YEARWEEK(NOW(), 1),'Monday'), '%x%v %W')) >= 0" \
+                        " AND Location IN (" + MFCList + ")" \
                         " GROUP BY STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'), Location" \
                         " ORDER BY Location, STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W')"
             print(statement)
@@ -515,58 +519,108 @@ def getAllActuals():
 
 
 def updateWkg(MFCList, Updates):
+    if 'MFC' in Updates[0]:
+        retVal = updateWkgWeekly(Updates)
+        return retVal
+    else:
+        retVal = {}
+        records = []
+        counter = 0
+        MFCList = cleanseMFCList(MFCList)
+        if MFCList["Result"] == 1:
+            MFCList = list(MFCList["Data"].split(","))
+            try_Conn = returnConnection()
+            if try_Conn[0] == 1:
+                my_Conn = try_Conn[1]
+                cur = my_Conn.cursor(dictionary=True)
+                insert_query = "INSERT into ForecastLoader (LoaderUUID, Asat, Location, Pcnt) values (%s, %s, %s, %s)"
+                uid = str(uuid.uuid4())
+                try:
+                    for M in MFCList:
+                        for U in Updates:
+                            print(U)
+                            Dte = U['Dte']
+                            Pcnt = float(U['Pcnt'])
+                            M = M.replace("'", "").strip()
+
+                            recordEntry = (uid, Dte, M, Pcnt)
+                            records.append(recordEntry)
+                            counter = counter + 1
+                            if counter == 999:
+                                cur.executemany(insert_query, records)
+                                counter = 0
+                                records = []
+
+                    if counter > 0:
+                        cur.executemany(insert_query, records)
+
+                    my_Conn.commit()
+                    statement = "CALL forecastLoader('" + uid + "')"
+                    cur.execute(statement)
+                    my_Conn.commit()
+                    my_Conn.close()
+                except mariadb.Error as e:
+                    retVal["Result"] = 0
+                    retVal["Data"] = str(e)
+                    return retVal
+
+                retVal["Result"] = 1
+                retVal["Data"] = 'Success'
+                return retVal
+            else:
+                retVal["Result"] = 0
+                retVal["Data"] = try_Conn[1]
+                return retVal
+        else:
+            retVal["Result"] = 0
+            retVal["Data"] = MFCList["Data"]
+            return retVal
+
+
+def updateWkgWeekly(Updates):
     retVal = {}
     records = []
     counter = 0
-    MFCList = cleanseMFCList(MFCList)
-    if MFCList["Result"] == 1:
-        MFCList = list(MFCList["Data"].split(","))
-        try_Conn = returnConnection()
-        if try_Conn[0] == 1:
-            my_Conn = try_Conn[1]
-            cur = my_Conn.cursor(dictionary=True)
-            insert_query = "INSERT into ForecastLoader (LoaderUUID, Asat, Location, Pcnt) values (%s, %s, %s, %s)"
-            uid = str(uuid.uuid4())
-            try:
-                for M in MFCList:
-                    for U in Updates:
-                        Dte = U['Dte']
-                        Pcnt = float(U['Pcnt'])
-                        M = M.replace("'", "").strip()
-
-                        recordEntry = (uid, Dte, M, Pcnt)
-                        records.append(recordEntry)
-
-                        counter = counter + 1
-                        if counter == 999:
-                            cur.executemany(insert_query, records)
-                            counter = 0
-                            records = []
-
-                if counter > 0:
+    try_Conn = returnConnection()
+    if try_Conn[0] == 1:
+        my_Conn = try_Conn[1]
+        cur = my_Conn.cursor(dictionary=True)
+        insert_query = "INSERT into ForecastLoader (LoaderUUID, Asat, Location, Pcnt) values (%s, %s, %s, %s)"
+        uid = str(uuid.uuid4())
+        try:
+            for U in Updates:
+                Dte = U['Dte']
+                Pcnt = float(U['Pcnt'])
+                M = U['MFC']
+                recordEntry = (uid, Dte, M, Pcnt)
+                records.append(recordEntry)
+                counter = counter + 1
+                if counter == 999:
                     cur.executemany(insert_query, records)
+                    counter = 0
+                    records = []
 
-                my_Conn.commit()
-                statement = "CALL forecastLoader('" + uid + "')"
-                cur.execute(statement)
-                my_Conn.commit()
-                my_Conn.close()
-            except mariadb.Error as e:
-                retVal["Result"] = 0
-                retVal["Data"] = str(e)
-                return retVal
+            if counter > 0:
+                cur.executemany(insert_query, records)
 
-            retVal["Result"] = 1
-            retVal["Data"] = 'Success'
-            return retVal
-        else:
+            my_Conn.commit()
+            statement = "CALL forecastLoader('" + uid + "')"
+            cur.execute(statement)
+            my_Conn.commit()
+            my_Conn.close()
+        except mariadb.Error as e:
             retVal["Result"] = 0
-            retVal["Data"] = try_Conn[1]
+            retVal["Data"] = str(e)
             return retVal
+
+        retVal["Result"] = 1
+        retVal["Data"] = 'Success'
+        return retVal
     else:
         retVal["Result"] = 0
-        retVal["Data"] = MFCList["Data"]
+        retVal["Data"] = try_Conn[1]
         return retVal
+
 
 
 def getWeeksMatrix():
