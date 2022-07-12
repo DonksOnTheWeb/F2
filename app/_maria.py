@@ -318,6 +318,7 @@ def unGrouped(MFCList, table):
             statement = "SELECT Date_Format(STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'), '%d-%b-%Y') AS WeekCommencing, Location, SUM(Act) AS Act" \
                         " FROM Actuals" \
                         " WHERE DATEDIFF(STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'),STR_TO_DATE(CONCAT(YEARWEEK(NOW(), 1),'Monday'), '%x%v %W')) >= -28" \
+                        " AND DATEDIFF(STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'),STR_TO_DATE(CONCAT(YEARWEEK(NOW(), 1),'Monday'), '%x%v %W')) < 0" \
                         " AND Location IN (" + MFCList + ")" \
                         " GROUP BY STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'), Location" \
                         " ORDER BY Location, STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W')"
