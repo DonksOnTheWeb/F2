@@ -1,6 +1,10 @@
 from flask import Flask, request
 from prophet import __version__
 from _prophet import forecast, fullReForecast
+import json
+from os.path import exists
+
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from _maria import getOfficialForecast, getLatestForecastDaily, getActuals, getWorkingForecast, listMFCs
 from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, determineTiers, ignoreWeeksOn, ignoreWeeksOff
@@ -195,6 +199,7 @@ def getActualsFromDB():
     for M in MFC:
         MFCList.append(M)
     result = getActuals(groupAs, MFCList)
+
     if result["Result"] == 0:
         logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
@@ -233,32 +238,47 @@ def onTheFlyForecast():
     return result
 
 
-#@app.route("/makeForecast", methods=['POST'])
-#def makeForecast():
-#    params = request.get_json(silent=True)
-#    result = forecast(params)
-#    cut_Down = result[['ds', 'yhat']]
-#    return str(cut_Down.to_json(orient='split'))
+def hbLogic():
+    today = datetime.now().strftime("%d-%b-%Y")
+    timestampTrigger = today + ", 08:45:00"
+    dailyTriggerTime = datetime.strptime(timestampTrigger,  "%d-%b-%Y, %H:%M:%S")
+    if (datetime.now() - dailyTriggerTime).total_seconds() > 0:
+        # Check to see if already run today
+        proceed = True
+        data = {}
+        if exists('heartbeat.json'):
+            f = open('heartbeat.json')
+            data = json.load(f)
+            if data['lastDate'] == today:
+                proceed = False
+        if proceed:
+            gSyncActuals(['UK', 'ES', 'FR'])
+            logger('I', "Clearing old forecasts...")
+            deleteOldDailyForecasts()
+            logger('I', "Performing full re-forcast...")
+            fullReForecast()
+            logger('I', "08:45 checks Done")
+            if datetime.today().weekday() == 0:
+                logger('I', "It's Monday ... Re-determining Tiers")
+                determineTiers()
+                logger('I', "It's Monday ... Copying last forecasts to Working")
+                copyToWorking()
+            data['lastDate'] = today
+            with open('heartbeat.json', 'w') as f:
+                json.dump(data, f)
 
 
-logger('I', "Server is now awake - checking actuals...")
-gSyncActuals(['UK', 'ES', 'FR'])
-logger('I', "Clearing old forecasts...")
-deleteOldDailyForecasts()
-logger('I', "Performing full re-forcast...")
-fullReForecast()
-if datetime.today().weekday() == 0:
-    logger('I', "It's Monday ... Re-determining Tiers")
-    determineTiers()
-    logger('I', "It's Monday ... Copying last forecasts to Working")
-    copyToWorking()
-
-OneOffLoaf = False
-if OneOffLoaf:
+logger('I', "The server is now awake.")
+OneOffLoad = False
+if OneOffLoad:
     logger('I', "One-off forecast history load")
     loadForecastOneOff()
 
-logger('I', "Startup Done")
+hbLogic()
+heartBeat = BackgroundScheduler(daemon=True)
+heartBeat.add_job(hbLogic, 'interval', minutes=15)
+heartBeat.start()
+
 
 if __name__ == "__main__":
     app.run()

@@ -139,20 +139,22 @@ def fullReForecast(alwaysForce=0):
 
                 today = datetime.date.today()
                 creation_date = datetime.datetime.strftime(today, date_format)
+                mfcCount = len(holder)
+                runningCount = 1
                 for MFC in holder:
                     try:
                         try:
                             ctry = json.loads(countryFromMFC(MFC)["Data"])[0]['Country']
                         except:
                             ctry = None
+                        logger('I', "Forecasting " + MFC + " (" + str(runningCount) + " of " + str(mfcCount) + ")")
+                        runningCount = runningCount + 1
                         MFC_forecast[MFC] = doForecast(holder[MFC], ctry)
                         localForecast = json.loads(MFC_forecast[MFC])
 
                         for entry in localForecast["data"]:
                             ts = int(entry[0]) / 1000
                             dte = datetime.datetime.fromtimestamp(ts).date()
-                            delta = dte - today
-                            # if delta.days >= 0:
                             dte = datetime.datetime.strftime(dte, date_format)
                             fcst = int(entry[1])
                             record = (creation_date, dte, MFC, fcst)

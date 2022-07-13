@@ -13,7 +13,9 @@ def returnConnection():
             password=data["password"],
             host=data["host"],
             port=data["port"],
-            database=data["database"]
+            database=data["database"],
+            ssl_ca="sslcert.pem",
+            ssl_verify_cert=True
         )
         retVal = (1, conn)
     except mariadb.Error as e:
@@ -329,7 +331,7 @@ def unGrouped(MFCList, table):
                         " AND Location IN (" + MFCList + ")" \
                         " GROUP BY STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W'), Location" \
                         " ORDER BY Location, STR_TO_DATE(CONCAT(YEARWEEK(Asat, 1),'Monday'), '%x%v %W')"
-            print(statement)
+
             try:
                 cur.execute(statement)
                 result = cur.fetchall()
@@ -539,7 +541,6 @@ def updateWkg(MFCList, Updates):
                 try:
                     for M in MFCList:
                         for U in Updates:
-                            print(U)
                             Dte = U['Dte']
                             Pcnt = float(U['Pcnt'])
                             M = M.replace("'", "").strip()
