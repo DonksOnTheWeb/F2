@@ -45,7 +45,7 @@ class suppress_stdout_stderr(object):
         os.close(self.null_fds[1])
 
 
-def forecast(groupAs, MFCList):
+def forecast(groupAs, MFCList, Just):
     data = getFilteredActuals(groupAs, MFCList)
     date_format = "%d-%b-%Y"
     retVal = {}
@@ -53,7 +53,11 @@ def forecast(groupAs, MFCList):
         ts = []
         final = []
         actuals = data["Data"]
+        Just = int(Just)
         actual = json.loads(actuals)
+        if Just > 0:
+            daysBack = (7 * Just) - datetime.datetime.today().weekday()
+            actual = actual[-daysBack:]
         for entry in actual:
             Date = entry["Asat"]
             Orders = entry["Act"]
@@ -83,10 +87,15 @@ def forecast(groupAs, MFCList):
 def doForecast(history_json, ctry=None):
     df = pd.json_normalize(history_json)
     m = Prophet(uncertainty_samples=0, changepoint_prior_scale=0.8, daily_seasonality=True, weekly_seasonality=True)
-    m = m.add_seasonality(
-        name='monthly',
-        period=30,
-        fourier_order=10)
+
+    d1 = datetime.datetime.strptime(history_json[0]['ds'], '%Y-%m-%d')
+    d2 = datetime.datetime.strptime(history_json[-1]['ds'], '%Y-%m-%d')
+    delta = (d2-d1).days
+    if delta > 60:
+        m = m.add_seasonality(
+            name='monthly',
+            period=30,
+            fourier_order=10)
     if ctry is not None:
         m.add_country_holidays(country_name=ctry)
     if debug:

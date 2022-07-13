@@ -227,11 +227,12 @@ def loadMFCsToDB():
 def onTheFlyForecast():
     params = request.get_json(silent=True)
     groupAs = params.get('GroupAs')
+    Just = params.get('Just')
     MFC = params.get('MFC')
     MFCList = []
     for M in MFC:
         MFCList.append(M)
-    result = forecast(groupAs, MFCList)
+    result = forecast(groupAs, MFCList, Just)
     if result["Result"] == 0:
         logger('W', result["Data"])
         result["Data"] = "Fail - check logs"
