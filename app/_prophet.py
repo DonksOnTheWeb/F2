@@ -56,7 +56,7 @@ def forecast(groupAs, MFCList, Just):
         Just = int(Just)
         actual = json.loads(actuals)
         if Just > 0:
-            daysBack = (7 * Just) - datetime.datetime.today().weekday()
+            daysBack = (7 * (Just - 1)) + datetime.datetime.today().weekday()
             actual = actual[-daysBack:]
         for entry in actual:
             Date = entry["Asat"]
@@ -86,11 +86,17 @@ def forecast(groupAs, MFCList, Just):
 
 def doForecast(history_json, ctry=None):
     df = pd.json_normalize(history_json)
-    m = Prophet(uncertainty_samples=0, changepoint_prior_scale=0.8, daily_seasonality=True, weekly_seasonality=True)
+    # m = Prophet(uncertainty_samples=0, changepoint_prior_scale=0.8, daily_seasonality=True, weekly_seasonality=True)
+    m = Prophet(uncertainty_samples=0, changepoint_prior_scale=0.8, daily_seasonality=True)
 
     d1 = datetime.datetime.strptime(history_json[0]['ds'], '%Y-%m-%d')
     d2 = datetime.datetime.strptime(history_json[-1]['ds'], '%Y-%m-%d')
     delta = (d2-d1).days
+    if delta > 14:
+        m = m.add_seasonality(
+            name='weekly',
+            period=7,
+            fourier_order=10)
     if delta > 60:
         m = m.add_seasonality(
             name='monthly',
