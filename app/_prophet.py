@@ -3,7 +3,7 @@ import datetime
 import pandas as pd
 from prophet import Prophet
 from _maria import getAllActuals, loadDailyForecast, latestForecastDailyDate, countryFromMFC, getFilteredActuals
-from loghandler import logger
+from _loghandler import logger
 import os
 
 global debug

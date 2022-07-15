@@ -11,7 +11,7 @@ from _maria import deleteOldDailyForecasts, loadMFCList, delMFCList, updateWkg, 
 from _maria import getWeeksMatrix, getIgnoredWeeksForMFCs, copyToWorking, submitForecast, unGrouped
 
 from _googlePull import gSyncActuals, loadForecastOneOff, writeForecastToSheet
-from loghandler import logger
+from _loghandler import logger
 import logging
 
 from datetime import datetime
@@ -26,8 +26,6 @@ logging.basicConfig(
     format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
 )
-
-logger('I', "STARTING UP THE LOGGER")
 
 app = Flask(__name__)
 
@@ -277,7 +275,7 @@ if OneOffLoad:
 
 hbLogic()
 heartBeat = BackgroundScheduler(daemon=True)
-heartBeat.add_job(hbLogic, 'interval', minutes=15)
+heartBeat.add_job(hbLogic, 'interval', minutes=5)
 heartBeat.start()
 
 

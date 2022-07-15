@@ -5,7 +5,7 @@ import json
 from hashlib import sha256
 
 from _maria import loadActuals, latestActualDate, loadForecastWrapper, getFullForecast
-from loghandler import logger
+from _loghandler import logger
 
 
 def writeForecastToSheet(ctry, InOff):
