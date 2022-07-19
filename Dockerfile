@@ -31,4 +31,4 @@ WORKDIR /deploy/app
 
 EXPOSE 5000
 
-CMD gunicorn app:app --config /deploy/gunicorn_config.py --timeout 600
+CMD gunicorn app:app --config /deploy/gunicorn_config.py --timeout 1200
