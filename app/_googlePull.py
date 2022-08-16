@@ -255,13 +255,16 @@ def MFCLookupWrapper(ctry, MFCLookup):
 
 
 def loadForecastOneOff():
-    gData = readFrom("Forecast", "!A:E")
+    gData = readFromOld("Forecast", "!A:E")
     gData = gData[1:]
     new_entries = []
     date_format = "%Y-%m-%d"
     for entry in gData:
         MFC = entry[0]
-        dte = datetime.datetime.strptime(entry[1], date_format).date()
+        try:
+            dte = datetime.datetime.strptime(entry[1], date_format).date()
+        except:
+            dte = datetime.datetime.strptime(entry[1], "%m/%d/%Y").date()
         fcst = int(float(entry[4].replace(',', '')))
         record = (dte, MFC, fcst)
         new_entries.append(record)

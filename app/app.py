@@ -236,6 +236,12 @@ def onTheFlyForecast():
         result["Data"] = "Fail - check logs"
     return result
 
+@app.route("/oneOff", methods=['POST'])
+def loadOneOff():
+    loadForecastOneOff()
+    result= {"Result": 1, "Data": "Success"}
+    return result
+
 
 def hbLogic():
     today = datetime.now().strftime("%d-%b-%Y")
@@ -272,6 +278,7 @@ OneOffLoad = False
 if OneOffLoad:
     logger('I', "One-off forecast history load")
     loadForecastOneOff()
+    logger('I', "DONE")
 
 hbLogic()
 heartBeat = BackgroundScheduler(daemon=True)
