@@ -245,7 +245,7 @@ def loadOneOff():
 
 def hbLogic():
     today = datetime.now().strftime("%d-%b-%Y")
-    timestampTrigger = today + ", 08:45:00"
+    timestampTrigger = today + ", 06:30:00"
     dailyTriggerTime = datetime.strptime(timestampTrigger,  "%d-%b-%Y, %H:%M:%S")
     if (datetime.now() - dailyTriggerTime).total_seconds() > 0:
         # Check to see if already run today
@@ -262,7 +262,7 @@ def hbLogic():
             deleteOldDailyForecasts()
             logger('I', "Performing full re-forcast...")
             fullReForecast()
-            logger('I', "08:45 checks Done")
+            logger('I', "06:30 checks Done")
             if datetime.today().weekday() == 0:
                 logger('I', "It's Monday ... Re-determining Tiers")
                 determineTiers()
