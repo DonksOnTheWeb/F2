@@ -25,7 +25,6 @@ ENV TZ="Europe/Luxembourg"
 
 COPY gunicorn_config.py /deploy/gunicorn_config.py
 COPY ./app /deploy/app
-COPY ./logs /deploy/logs
 
 WORKDIR /deploy/app
 

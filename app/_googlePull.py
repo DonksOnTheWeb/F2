@@ -2,10 +2,161 @@ from googleapiclient.discovery import build
 from google.oauth2 import service_account
 import datetime
 import json
-from hashlib import sha256
-
-from _maria import loadActuals, latestActualDate, loadForecastWrapper, getFullForecast
 from _loghandler import logger
+
+
+def buildDictionaries():
+    howFarBack = 4
+
+    # We first create a dict of regions and MFCs and opening times
+    liveMFCs = readFromGeneric('Live', '1GmOojxN2v0vjJKT_g3SfSv6EgLJ4eMLoKo08LlKTXFk', '!A:J')
+    GeoTags = {}
+    OpeningCol = {}
+    Opening = {}
+    line = 0
+    dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    for entry in liveMFCs:
+        MFC = entry[0]
+        GeoTag = entry[1]
+        if line == 0:
+            itr = 0
+            for col in entry:
+                if col in dayNames:
+                    OpeningCol[col] = itr
+                itr = itr + 1
+            line = line + 1
+        else:
+            GeoTags[MFC] = GeoTag
+            openingHours = {}
+            for dn in dayNames:
+                openingHours[dn] = entry[OpeningCol[dn]]
+            Opening[MFC] = openingHours
+
+    # We then read all the Actual Data as a list of [Dte, MFC, Orders]
+    actualOrders = readFromGeneric('Orders_Daily_FR_UK_ES.csv', '1Uykg22mWkNwj2v-jgYJN0WbtDAKQx9ZkF4aoRXxb6VU', '!B:D')
+
+    # Iterating this data, we create a dictionary of dates and orders for each MFC
+    Orders = {}
+    actualOrders = actualOrders[1:]
+    for entry in actualOrders:
+        dte = entry[0]
+        MFC = entry[1]
+        actual = entry[2].replace(',', '').replace('.', '')
+        if len(MFC) > 0:
+            if MFC in GeoTags:
+                if MFC in Orders:
+                    Orders[MFC][dte] = actual
+                else:
+                    Orders[MFC] = {dte: actual}
+
+    # Finally read the hourly data as a list of [Date, MFC, Hour, Orders]
+    hourlyOrders = readFromGeneric('Hourly Dump (FR + UK).csv', '1TjJpezxYxcet7VTWWFm-irtugOIfe7mjymUG7XId7rM', '!A:D')
+
+    # Iterating this data to create an average hourly curve for each MFC for each Day
+    hourly = {}
+    hourly_G = {}
+    hourlyOrders = hourlyOrders[1:]
+    for entry in hourlyOrders:
+        dte = entry[0]
+        dte = datetime.datetime.strptime(dte, '%Y-%m-%d')
+        now = datetime.datetime.now()
+        proceed = False
+        if (now.date() - dte.date()).days <= howFarBack * 7:
+            proceed = True
+        dte = dte.strftime('%a')  # In format Mon, Tue, Wed etc...
+        MFC = entry[1]
+        GeoTag = GeoTags[MFC]
+        hr = entry[2]
+        actual = entry[3].replace(',', '').replace('.', '')
+        # populate the hourly json
+        if proceed:
+            if MFC in hourly:
+                if dte in hourly[MFC]:
+                    hourly[MFC][dte]['Tot'] = hourly[MFC][dte]['Tot'] + int(actual)
+                    if hr in hourly[MFC][dte]:
+                        hourly[MFC][dte][hr] = hourly[MFC][dte][hr] + int(actual)
+                        hourly[MFC][dte][str(hr) + 'Count'] = hourly[MFC][dte][hr] + 1
+                    else:
+                        hourly[MFC][dte][hr] = int(actual)
+                        hourly[MFC][dte][str(hr) + 'Count'] = 1
+                else:
+                    hourly[MFC][dte] = {hr: int(actual), 'Tot': int(actual), str(hr) + 'Count': 1}
+            else:
+                hourly[MFC] = {dte: {hr: int(actual), 'Tot': int(actual), str(hr) + 'Count': 1}}
+
+            if GeoTag in hourly_G:
+                if dte in hourly_G[GeoTag]:
+                    hourly_G[GeoTag][dte]['Tot'] = hourly_G[GeoTag][dte]['Tot'] + int(actual)
+                    if hr in hourly_G[GeoTag][dte]:
+                        hourly_G[GeoTag][dte][hr] = hourly_G[GeoTag][dte][hr] + int(actual)
+                    else:
+                        hourly_G[GeoTag][dte][hr] = int(actual)
+                else:
+                    hourly_G[GeoTag][dte] = {hr: int(actual), 'Tot': int(actual)}
+            else:
+                hourly_G[GeoTag] = {dte: {hr: int(actual), 'Tot': int(actual)}}
+
+    # Now normalise the curves
+    normHourly_G = {}
+    for GeoTag in hourly_G:
+        for dte in hourly_G[GeoTag]:
+            for entry in hourly_G[GeoTag][dte]:
+                if 'Tot' not in entry:
+                    normsVal = hourly_G[GeoTag][dte][entry] / hourly_G[GeoTag][dte]['Tot']
+                    if GeoTag in normHourly_G:
+                        if dte in normHourly_G[GeoTag]:
+                            normHourly_G[GeoTag][dte][entry] = normsVal
+                        else:
+                            normHourly_G[GeoTag][dte] = {entry: normsVal}
+                    else:
+                        normHourly_G[GeoTag] = {dte: {entry: normsVal}}
+
+    normHourly = {}
+    for MFC in hourly:
+        for dte in hourly[MFC]:
+            for entry in hourly[MFC][dte]:
+                if 'Count' not in entry and 'Tot' not in entry:
+                    normsVal = hourly[MFC][dte][entry] / hourly[MFC][dte]['Tot']
+                    if MFC in normHourly:
+                        if dte in normHourly[MFC]:
+                            normHourly[MFC][dte][entry] = normsVal
+                        else:
+                            normHourly[MFC][dte] = {entry: normsVal}
+                    else:
+                        normHourly[MFC] = {dte: {entry: normsVal}}
+
+    # Now finally replace any entries without howFarBack entries with their geotag equiv average.
+    for MFC in hourly:
+        for dte in hourly[MFC]:
+            for entry in hourly[MFC][dte]:
+                if 'Count' in entry:
+                    if hourly[MFC][dte][entry] < howFarBack:
+                        # pull from GeoTag
+                        hr = entry.replace('Count', '')
+                        GeoTag = GeoTags[MFC]
+                        normHourly[MFC][dte][hr] = normHourly_G[GeoTag][dte][hr]
+                        print("Replaced " + MFC + " " + dte + " " + hr + " with " + GeoTag)
+
+    # REMEMBER opening hours
+
+
+def readFromGeneric(sheet_name, sheet_id, cols):
+    # sheet_name is the tab name
+    # sheet_id is the google hash for the sheet
+    # cols is in format !B:D
+
+    SERVICE_ACCOUNT_FILE = 'keys.json'
+    SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
+
+    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    service = build('sheets', 'v4', credentials=creds)
+
+    # Call the Sheets API
+    sheet = service.spreadsheets()
+    result = sheet.values().get(spreadsheetId=sheet_id, range=sheet_name + cols).execute()
+    values = result.get('values', [])
+
+    return values
 
 
 def writeForecastToSheet(ctry, InOff):
@@ -51,9 +202,10 @@ def writeTo(ctry, jsonData, inOff):
         # First clear existing
         sheet.values().clear(spreadsheetId=spreadsheet_id, range=clearRange).execute()
 
-        #Now the headers
+        # Now the headers
         data = {'values': values}
-        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=headersRange, valueInputOption='USER_ENTERED').execute()
+        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=headersRange,
+                              valueInputOption='USER_ENTERED').execute()
 
         # Now the full data
         values = []
@@ -61,14 +213,16 @@ def writeTo(ctry, jsonData, inOff):
             values.append([entry['Asat'], entry['Location'], entry['Forecast']])
 
         data = {'values': values}
-        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=dataRange, valueInputOption='USER_ENTERED').execute()
+        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=dataRange,
+                              valueInputOption='USER_ENTERED').execute()
         # Then the timestamp
         timestamp = datetime.datetime.now().strftime("%d-%b-%Y, %H:%M:%S")
         values = [
             [timestamp, len(jsonData)]
         ]
         data = {'values': values}
-        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=tsRange, valueInputOption='USER_ENTERED').execute()
+        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=tsRange,
+                              valueInputOption='USER_ENTERED').execute()
         retVal["Result"] = 1
         retVal["Data"] = "Success"
     except:
@@ -271,4 +425,3 @@ def loadForecastOneOff():
 
     loadForecastWrapper(new_entries)
     logger('I', "Loaded forecast data - " + str(len(new_entries)) + " entries.")
-
