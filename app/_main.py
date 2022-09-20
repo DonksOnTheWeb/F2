@@ -108,6 +108,15 @@ def mainLoop(MFC, geoTags, becomes, hourlyRaw, dailyRaw, dailyRaw_Historic, yest
     logger("I", "Running forecasts for " + MFC)
     forecast_ts = doForecast(MFC, yesterday, ts, ctry, params['Best'])
     accCheck_ts = doForecast(MFC, lastWeek, ts_acc, ctry, params['Best'])
+
+    print()
+    print(forecast_ts)
+    print()
+    print(accCheck_ts)
+    print()
+
+    a=1/0
+
     logger("I", "Exporting Results.")
 
     # Print Accuracy
