@@ -10,3 +10,4 @@
 	"periods":5,
     "holiday_locale":"FR"
 }
+# F2
