@@ -23,11 +23,7 @@ RUN pip3 install --upgrade --no-cache-dir apscheduler
 ENV PYTHONUNBUFFERED=1
 ENV TZ="Europe/Luxembourg"
 
-COPY gunicorn_config.py /deploy/gunicorn_config.py
-COPY ./app /deploy/app
-
 WORKDIR /deploy/app
 
-EXPOSE 5000
-
-CMD gunicorn app:app --config /deploy/gunicorn_config.py --timeout 1200
+COPY ./app /deploy/app
+CMD ["python", "/deploy/app/app.py"]

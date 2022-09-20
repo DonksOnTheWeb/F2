@@ -1,23 +1,222 @@
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
+import math
 import datetime
+import time
 import json
+
 from _loghandler import logger
+from _prophet import doHPT, doForecast
+
+from _readers import readFromGeneric
+from _writers import writeHourly, writeParams, writeForecast, printHourlyAccuracy, printDailyAccuracy
+
+
+def autoTune():
+    failSleepTime = 60
+    ordersDict = buildDictionaries()
+    writeHourly(ordersDict['MFCs_Hourly'], 'H Crve MFC')
+    writeHourly(ordersDict['Regions_Hourly'], 'H Crve Rgn')
+    # Now convert the TS into a nice json and send data to the prophet module
+    itr = 1
+    accStartRow = {'D': 2, 'H': 2}
+    outRowByCountryD = {}
+    outRowByCountryHD = {}
+    outRowByCountryW = {}
+    printOffset = 0
+
+    MFCList = []
+    for entry in ordersDict['MFCList']:
+        if entry not in MFCList:
+            MFCList.append(entry)
+    MFCList.sort()
+
+    for MFC in MFCList:
+        result = False
+        while not result:
+            try:
+                rows = fullMFCprocess(ordersDict, MFC, accStartRow, outRowByCountryD, outRowByCountryHD,
+                                      outRowByCountryW, itr, printOffset)
+                accStartRow = rows['AccStart']
+                outRowByCountryD = rows['D']
+                outRowByCountryHD = rows['HD']
+                outRowByCountryW = rows['W']
+                itr = rows['I']
+                result = True
+            except Exception as e:
+                logger('W', '')
+                logger('W', repr(e))
+                logger('W', MFC + ' Failed.  Sleeping ' + str(failSleepTime) + '...')
+                time.sleep(failSleepTime)
+                logger('I', 'Trying ' + MFC + ' again')
+
+
+def fullMFCprocess(ordersDict, MFC, accStartRow, outRowByCountryD, outRowByCountryHD, outRowByCountryW, itr,printOffset):
+    ts = []
+    ts_lw = []
+    earliest = None
+    latest = None
+    ctry = (ordersDict['Regions'][MFC]).split('_')[0]
+    for entry in ordersDict['DailyOrders'][MFC]:
+        dte = entry
+        dte = datetime.datetime.strptime(dte, '%Y-%m-%d')
+        if earliest is None:
+            earliest = dte
+        else:
+            if dte < earliest:
+                earliest = dte
+
+        if latest is None:
+            latest = dte
+        else:
+            if dte > latest:
+                latest = dte
+
+    # latest should be yesterday at most
+    yesterday = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+    yesterday = datetime.datetime.strptime(yesterday, '%Y-%m-%d')
+    if latest > yesterday:
+        latest = yesterday
+
+    lastWeek = latest - datetime.timedelta(days=6)  # remember we have already gone one day back to yesterday.
+    logger("I",
+           MFC + ": Earliest date:" + str(earliest) + " Latest date:" + str(latest) + " Last week:" + str(lastWeek))
+
+    delta = datetime.timedelta(days=1)
+    while earliest <= latest:
+        dte = earliest.strftime('%Y-%m-%d')
+        if dte in ordersDict['DailyOrders'][MFC]:
+            Orders = ordersDict['DailyOrders'][MFC][dte]
+            ts.append({"ds": dte, "y": Orders})
+            if earliest <= lastWeek:
+                ts_lw.append({"ds": dte, "y": Orders})
+
+        earliest += delta
+
+    timestamp = datetime.datetime.now().strftime('%d-%b-%Y, %H:%M:%S')
+    logger("I", "Running " + MFC + " - number " + str(itr) + " at " + timestamp)
+    prophetParams = doHPT(MFC, ts, ctry)
+    timestamp = datetime.datetime.now().strftime('%d-%b-%Y, %H:%M:%S')
+    logger("I", "Completed " + MFC + " - number " + str(itr) + " at " + timestamp)
+    logger("I", "")
+    writeParams(prophetParams['MFC'], prophetParams['Best'], prophetParams['Ctry'], itr)
+
+    # Now do forecast with those params
+    forecast_ts = doForecast(MFC, latest, ts, prophetParams['Ctry'], prophetParams['Best'])
+    # ...and the accuracy check forecast
+    lastWeek = latest - datetime.timedelta(days=7)
+    accuracy_ts = doForecast(MFC, lastWeek, ts_lw, prophetParams['Ctry'], prophetParams['Best'])
+
+    # Print out the accuracy
+    acc_ts = createNiceTS(MFC, accuracy_ts, ordersDict)
+    hourlyDailyList = acc_ts['HD']  # forecast by HD
+    dailyList = acc_ts['D']  # forecast by D
+    hourlyOrders = ordersDict['HourlyOrders'][MFC]  # orders by H.  We will use 7 days worth
+    dailyOrders = ordersDict['DailyOrders'][MFC]  # forecast by D.  We will use 7 days worth
+
+    accStartRow['H'] = printHourlyAccuracy(MFC, ctry, hourlyDailyList, hourlyOrders, accStartRow['H'], yesterday)
+    accStartRow['D'] = printDailyAccuracy(MFC, ctry, dailyList, dailyOrders, accStartRow['D'], yesterday)
+
+    # exportAccuracy(MFC, ctry, itr, hourlyDailyList, hourlyOrders, latest, accStartRow)
+    itr = itr + 1
+
+    # Create 2 timeseries for display in gSheets -  HourlyDaily, Daily
+    out_ts = createNiceTS(MFC, forecast_ts, ordersDict)
+
+    hourlyDailyList = out_ts['HD']
+    dailyList = out_ts['D']
+    weeklyList = out_ts['W']
+
+    # Now write these to the forecast tabs
+    if ctry in outRowByCountryD:
+        outRow = outRowByCountryD[ctry]
+    else:
+        outRow = 2
+    writeForecast(MFC, dailyList, ctry + " Fcast D", outRow, False)
+    outRow = outRow + len(dailyList) + printOffset
+    outRowByCountryD[ctry] = outRow
+
+    if ctry in outRowByCountryHD:
+        outRow = outRowByCountryHD[ctry]
+    else:
+        outRow = 2
+    writeForecast(MFC, hourlyDailyList, ctry + " Fcast HD", outRow, False)
+    outRow = outRow + len(hourlyDailyList) + printOffset
+    outRowByCountryHD[ctry] = outRow
+
+    if ctry in outRowByCountryW:
+        outRow = outRowByCountryW[ctry]
+    else:
+        outRow = 2
+    writeForecast(MFC, weeklyList, ctry + " Fcast W", outRow, True)
+    outRow = outRow + len(weeklyList) + printOffset
+    outRowByCountryW[ctry] = outRow
+
+    rows = {'AccStart': accStartRow, 'D': outRowByCountryD, 'HD': outRowByCountryHD,
+            'W': outRowByCountryW, 'I': itr}
+    return rows
+
+
+def createNiceTS(MFC, ts, ordersDict):
+    # use this to build out the TS for the forecast and accuracy forecast
+    dCount = 0
+    dailyList = []
+    hourlyDailyList = []
+    weeklyList = []
+    weekTotal = 0
+    for entry in ts['Forecast']:
+        dt_dte = datetime.datetime.strptime(entry, '%Y-%m-%d')
+        dte = dt_dte.strftime('%Y-%m-%d')
+        orders = math.ceil(ts['Forecast'][entry])
+
+        # Check if beyond 8 weeks - if so only do weekly here
+        if dCount < 56:
+            dailyList.append({'Date': dte, 'Hour': '10', 'Forecast': orders})
+            if dCount < 21:
+                day = dt_dte.strftime('%a')
+                if MFC in ordersDict['MFCs_Hourly']:
+                    curve = ordersDict['MFCs_Hourly'][MFC][day]
+                else:
+                    proxy = ordersDict['Regions'][MFC]
+                    curve = ordersDict['Regions_Hourly'][proxy][day]
+                    logger("I", MFC + " not in hourly dictionary - using " + proxy + " as proxy")
+                for hr in range(0, 24):
+                    hr = str(hr)
+                    if hr in curve:
+                        oph = math.ceil(curve[hr] * orders)
+                    else:
+                        oph = 0
+                    hourlyDailyList.append({'Date': dte, 'Hour': hr, 'Forecast': oph})
+            else:
+                hourlyDailyList.append({'Date': dte, 'Hour': '10', 'Forecast': orders})
+        dCount = dCount + 1
+        weekTotal = weekTotal + orders
+        if (dCount % 7) == 0:  # We have done a week
+            commencing = (dt_dte - datetime.timedelta(days=dt_dte.weekday())).strftime('%Y-%m-%d')
+            weeklyList.append({'Date': commencing, 'Forecast': weekTotal})
+            weekTotal = 0
+
+    retVal = {'HD': hourlyDailyList, 'D': dailyList, 'W': weeklyList}
+    return retVal
 
 
 def buildDictionaries():
     howFarBack = 4
 
     # We first create a dict of regions and MFCs and opening times
+    logger("I", "Getting MFC definitions")
     liveMFCs = readFromGeneric('Live', '1GmOojxN2v0vjJKT_g3SfSv6EgLJ4eMLoKo08LlKTXFk', '!A:J')
+    logger("I", "Done")
     GeoTags = {}
     OpeningCol = {}
     Opening = {}
+    ActiveMFCs = []
+    becomes = {}
     line = 0
     dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     for entry in liveMFCs:
         MFC = entry[0]
         GeoTag = entry[1]
+        was = entry[2]
+        ActiveMFCs.append(MFC)
         if line == 0:
             itr = 0
             for col in entry:
@@ -31,10 +230,12 @@ def buildDictionaries():
             for dn in dayNames:
                 openingHours[dn] = entry[OpeningCol[dn]]
             Opening[MFC] = openingHours
+            if len(was) > 0:
+                becomes[was] = MFC
 
     # We then read all the Actual Data as a list of [Dte, MFC, Orders]
-    actualOrders = readFromGeneric('Orders_Daily_FR_UK_ES.csv', '1Uykg22mWkNwj2v-jgYJN0WbtDAKQx9ZkF4aoRXxb6VU', '!B:D')
-
+    actualOrders = readFromGeneric('Daily Order Dump (FR + UK) Runs Daily.csv',
+                                   '1_l2aPXa7Huql-3u5MXfbqLq2HpTQd0HBRM8w4b09igo', '!A:C')
     # Iterating this data, we create a dictionary of dates and orders for each MFC
     Orders = {}
     actualOrders = actualOrders[1:]
@@ -42,386 +243,134 @@ def buildDictionaries():
         dte = entry[0]
         MFC = entry[1]
         actual = entry[2].replace(',', '').replace('.', '')
+        if MFC in becomes:
+            MFC = becomes[MFC]
         if len(MFC) > 0:
             if MFC in GeoTags:
-                if MFC in Orders:
-                    Orders[MFC][dte] = actual
-                else:
-                    Orders[MFC] = {dte: actual}
+                if MFC in ActiveMFCs:
+                    if MFC in Orders:
+                        Orders[MFC][dte] = actual
+                    else:
+                        Orders[MFC] = {dte: actual}
 
     # Finally read the hourly data as a list of [Date, MFC, Hour, Orders]
-    hourlyOrders = readFromGeneric('Hourly Dump (FR + UK).csv', '1TjJpezxYxcet7VTWWFm-irtugOIfe7mjymUG7XId7rM', '!A:D')
-
+    hourlyOrders = readFromGeneric('Hourly Dump (FR + UK).csv',
+                                   '1TjJpezxYxcet7VTWWFm-irtugOIfe7mjymUG7XId7rM', '!A:D')
     # Iterating this data to create an average hourly curve for each MFC for each Day
     hourly = {}
     hourly_G = {}
     hourlyOrders = hourlyOrders[1:]
+    hourlyActuals = {}
+    earliest = None
+    latest = None
     for entry in hourlyOrders:
         dte = entry[0]
         dte = datetime.datetime.strptime(dte, '%Y-%m-%d')
-        now = datetime.datetime.now()
-        proceed = False
-        if (now.date() - dte.date()).days <= howFarBack * 7:
-            proceed = True
+        if earliest is None:
+            earliest = dte
+        else:
+            if dte < earliest:
+                earliest = dte
+
+        if latest is None:
+            latest = dte
+        else:
+            if dte > latest:
+                latest = dte
+
+        yyyymmdd = dte.strftime('%Y-%m-%d')
         dte = dte.strftime('%a')  # In format Mon, Tue, Wed etc...
         MFC = entry[1]
-        GeoTag = GeoTags[MFC]
         hr = entry[2]
         actual = entry[3].replace(',', '').replace('.', '')
-        # populate the hourly json
-        if proceed:
-            if MFC in hourly:
-                if dte in hourly[MFC]:
-                    hourly[MFC][dte]['Tot'] = hourly[MFC][dte]['Tot'] + int(actual)
-                    if hr in hourly[MFC][dte]:
-                        hourly[MFC][dte][hr] = hourly[MFC][dte][hr] + int(actual)
-                        hourly[MFC][dte][str(hr) + 'Count'] = hourly[MFC][dte][hr] + 1
-                    else:
-                        hourly[MFC][dte][hr] = int(actual)
-                        hourly[MFC][dte][str(hr) + 'Count'] = 1
-                else:
-                    hourly[MFC][dte] = {hr: int(actual), 'Tot': int(actual), str(hr) + 'Count': 1}
-            else:
-                hourly[MFC] = {dte: {hr: int(actual), 'Tot': int(actual), str(hr) + 'Count': 1}}
 
-            if GeoTag in hourly_G:
-                if dte in hourly_G[GeoTag]:
-                    hourly_G[GeoTag][dte]['Tot'] = hourly_G[GeoTag][dte]['Tot'] + int(actual)
-                    if hr in hourly_G[GeoTag][dte]:
-                        hourly_G[GeoTag][dte][hr] = hourly_G[GeoTag][dte][hr] + int(actual)
-                    else:
-                        hourly_G[GeoTag][dte][hr] = int(actual)
+        if MFC in becomes:
+            MFC = becomes[MFC]
+        if MFC in ActiveMFCs:
+            GeoTag = GeoTags[MFC]
+            # hourly actuals.  This is the true data as opposed to average data.
+            if MFC in hourlyActuals:
+                if yyyymmdd in hourlyActuals[MFC]:
+                    hourlyActuals[MFC][yyyymmdd][hr] = int(actual)
                 else:
-                    hourly_G[GeoTag][dte] = {hr: int(actual), 'Tot': int(actual)}
+                    hourlyActuals[MFC][yyyymmdd] = {hr: int(actual)}
             else:
-                hourly_G[GeoTag] = {dte: {hr: int(actual), 'Tot': int(actual)}}
+                hourlyActuals[MFC] = {yyyymmdd: {hr: int(actual)}}
+
+            # populate the hourly json.  This is the average curve
+            hourly = hourBuilder(MFC, hourly, dte, hr, actual)
+            hourly_G = hourBuilder(GeoTag, hourly_G, dte, hr, actual)
 
     # Now normalise the curves
-    normHourly_G = {}
-    for GeoTag in hourly_G:
-        for dte in hourly_G[GeoTag]:
-            for entry in hourly_G[GeoTag][dte]:
-                if 'Tot' not in entry:
-                    normsVal = hourly_G[GeoTag][dte][entry] / hourly_G[GeoTag][dte]['Tot']
-                    if GeoTag in normHourly_G:
-                        if dte in normHourly_G[GeoTag]:
-                            normHourly_G[GeoTag][dte][entry] = normsVal
-                        else:
-                            normHourly_G[GeoTag][dte] = {entry: normsVal}
-                    else:
-                        normHourly_G[GeoTag] = {dte: {entry: normsVal}}
-
-    normHourly = {}
-    for MFC in hourly:
-        for dte in hourly[MFC]:
-            for entry in hourly[MFC][dte]:
-                if 'Count' not in entry and 'Tot' not in entry:
-                    normsVal = hourly[MFC][dte][entry] / hourly[MFC][dte]['Tot']
-                    if MFC in normHourly:
-                        if dte in normHourly[MFC]:
-                            normHourly[MFC][dte][entry] = normsVal
-                        else:
-                            normHourly[MFC][dte] = {entry: normsVal}
-                    else:
-                        normHourly[MFC] = {dte: {entry: normsVal}}
+    normHourly = hourNormalise(hourly)
+    normHourly_G = hourNormalise(hourly_G)
 
     # Now finally replace any entries without howFarBack entries with their geotag equiv average.
+    howFarBack = math.floor(((latest - earliest).days + 1) / 7)
+    logger('I', 'Earliest: ' + earliest.strftime('%d-%b-%Y'))
+    logger('I', 'Latest: ' + latest.strftime('%d-%b-%Y'))
+    logger('I', 'Delta (Inclusive): ' + str((latest - earliest).days + 1))
+    logger('I', 'I am going back ' + str(howFarBack) + ' weeks')
+
+    replacements = {}
     for MFC in hourly:
-        for dte in hourly[MFC]:
-            for entry in hourly[MFC][dte]:
-                if 'Count' in entry:
-                    if hourly[MFC][dte][entry] < howFarBack:
-                        # pull from GeoTag
-                        hr = entry.replace('Count', '')
-                        GeoTag = GeoTags[MFC]
-                        normHourly[MFC][dte][hr] = normHourly_G[GeoTag][dte][hr]
-                        print("Replaced " + MFC + " " + dte + " " + hr + " with " + GeoTag)
+        if MFC in ActiveMFCs:
+            for dte in hourly[MFC]:
+                for entry in hourly[MFC][dte]:
+                    if 'Count' in entry:
+                        if hourly[MFC][dte][entry] < howFarBack:
+                            replacements[MFC + ' ' + dte + ' - using some region values'] = 1
+                            # pull missing from GeoTag
+                            hr = entry.replace('Count', '')
+                            GeoTag = GeoTags[MFC]
+                            normHourly[MFC][dte][hr] = normHourly_G[GeoTag][dte][hr]
 
-    # REMEMBER opening hours
+    for r in replacements:
+        logger('I', r)
 
+    'Now shift the opening hours for each MFC'
 
-def readFromGeneric(sheet_name, sheet_id, cols):
-    # sheet_name is the tab name
-    # sheet_id is the google hash for the sheet
-    # cols is in format !B:D
+    retVal = {'MFCs_Hourly': normHourly,
+              'Regions_Hourly': normHourly_G,
+              'HourlyOrders': hourlyActuals,
+              'DailyOrders': Orders,
+              'Regions': GeoTags,
+              'MFCList': ActiveMFCs}
 
-    SERVICE_ACCOUNT_FILE = 'keys.json'
-    SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
-
-    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    service = build('sheets', 'v4', credentials=creds)
-
-    # Call the Sheets API
-    sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=sheet_id, range=sheet_name + cols).execute()
-    values = result.get('values', [])
-
-    return values
+    return retVal
 
 
-def writeForecastToSheet(ctry, InOff):
-    result = getFullForecast(ctry, InOff)
-    result = json.loads(result["Data"])
-    result = writeTo(ctry, result, InOff)
-    return result
-
-
-def writeTo(ctry, jsonData, inOff):
-    retVal = {}
-    try:
-        SERVICE_ACCOUNT_FILE = 'keys.json'
-        SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-
-        creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-
-        # The ID and range of a sample spreadsheet.
-        spreadsheet_id = '1vDUg9kZD__YDcjkkeeycxeykkD5Oz0nLIRpOc4i2ww8'
-        service = build('sheets', 'v4', credentials=creds)
-
-        # Call the Sheets API
-        sheet = service.spreadsheets()
-        if inOff == 'O':
-            clearRange = ctry + "!A:C"
-            headersRange = ctry + "!A1:C2"
-            dataRange = ctry + '!A3:C' + str(len(jsonData) + 2)
-            tsRange = ctry + "!J2:K2"
-            values = [
-                ['OFFICIAL', '', ''],
-                ['Date', 'Location', 'Forecast'],
-            ]
+def hourBuilder(key, p_json, dte, hr, actual):
+    if key in p_json:
+        if dte in p_json[key]:
+            p_json[key][dte]['Tot'] = p_json[key][dte]['Tot'] + int(actual)
+            if hr in p_json[key][dte]:
+                p_json[key][dte][hr] = p_json[key][dte][hr] + int(actual)
+                p_json[key][dte][str(hr) + 'Count'] = p_json[key][dte][str(hr) + 'Count'] + 1
+            else:
+                p_json[key][dte][hr] = int(actual)
+                p_json[key][dte][str(hr) + 'Count'] = 1
         else:
-            clearRange = ctry + "!E:G"
-            headersRange = ctry + "!E1:G2"
-            dataRange = ctry + '!E3:G' + str(len(jsonData) + 2)
-            tsRange = ctry + "!J3:K3"
-            values = [
-                ['INTRA', '', ''],
-                ['Date', 'Location', 'Forecast'],
-            ]
-
-        # First clear existing
-        sheet.values().clear(spreadsheetId=spreadsheet_id, range=clearRange).execute()
-
-        # Now the headers
-        data = {'values': values}
-        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=headersRange,
-                              valueInputOption='USER_ENTERED').execute()
-
-        # Now the full data
-        values = []
-        for entry in jsonData:
-            values.append([entry['Asat'], entry['Location'], entry['Forecast']])
-
-        data = {'values': values}
-        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=dataRange,
-                              valueInputOption='USER_ENTERED').execute()
-        # Then the timestamp
-        timestamp = datetime.datetime.now().strftime("%d-%b-%Y, %H:%M:%S")
-        values = [
-            [timestamp, len(jsonData)]
-        ]
-        data = {'values': values}
-        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=tsRange,
-                              valueInputOption='USER_ENTERED').execute()
-        retVal["Result"] = 1
-        retVal["Data"] = "Success"
-    except:
-        retVal["Result"] = 0
-        retVal["Data"] = "Error in WriteTo gsheets function"
-    return retVal
-
-
-def readFrom(sheetname):
-    SERVICE_ACCOUNT_FILE = 'keys.json'
-    SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
-
-    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-
-    # The ID and range of a sample spreadsheet.
-    spreadsheet_id = '1Uykg22mWkNwj2v-jgYJN0WbtDAKQx9ZkF4aoRXxb6VU'
-
-    service = build('sheets', 'v4', credentials=creds)
-
-    # Call the Sheets API
-    cols = "!B:D"
-
-    sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=spreadsheet_id, range=sheetname + cols).execute()
-    values = result.get('values', [])
-
-    return values
-
-
-def readFromOld(sheetname, cols=None):
-    SERVICE_ACCOUNT_FILE = 'keys.json'
-    SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
-
-    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-
-    # The ID and range of a sample spreadsheet.
-    spreadsheet_id = '1JQH_br1-_wSTQec0hr6OKJb1AKZYdwLf2vKVjpXWjWs'
-
-    service = build('sheets', 'v4', credentials=creds)
-
-    # Call the Sheets API
-
-    if cols is None:
-        cols = "!A:C"
-
-    sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=spreadsheet_id, range=sheetname + cols).execute()
-    values = result.get('values', [])
-
-    return values
-
-
-def checkDaily(lastEntry):
-    retVal = {}
-    date_format = "%Y-%m-%d"
-    new_entries = []
-    gData = readFrom('Orders_Daily_FR_UK_ES.csv')
-    gData = gData[1:]
-    haveLoaded = False
-    finalStr = "No new entries found"
-    latestFileDate = datetime.datetime.strptime("2000-01-01", date_format).date()
-    for entry in gData:
-        if len(entry[0]) > 1:
-            dte = datetime.datetime.strptime(entry[0], date_format).date()
-            delta = dte - latestFileDate
-            if delta.days >= 0:
-                latestFileDate = dte
-
-            delta = dte - lastEntry
-            if delta.days >= -5:
-                MFC = entry[1]
-                record = (entry[0], MFC, int(entry[2].replace(',', '')))
-                new_entries.append(record)
-                haveLoaded = True
-
-    loaded = loadActuals(new_entries)
-    if haveLoaded:
-        finalStr = "Loaded " + str(loaded["Data"]) + " records.  Includes attempted re-load of last 5 days"
-
-    logger('I', finalStr)
-    logger('I', "Latest file date found for is " + datetime.datetime.strftime(latestFileDate, date_format))
-    retVal["Result"] = 1
-    retVal["Data"] = loaded
-    return retVal
-
-
-def checkDailyOLD(ctry, lastEntry):
-    retVal = {}
-    date_format = "%Y-%m-%d"
-    new_entries = []
-    gData = readFrom(ctry)
-    gData = gData[1:]
-    haveLoaded = False
-    finalStr = "No new entries for " + ctry
-    latestFileDate = datetime.datetime.strptime("2000-01-01", date_format).date()
-    for entry in gData:
-        dte = datetime.datetime.strptime(entry[1], date_format).date()
-        delta = dte - latestFileDate
-        if delta.days >= 0:
-            latestFileDate = dte
-
-        delta = dte - lastEntry
-        if delta.days >= -5:
-            MFC = entry[0]
-            record = (entry[1], MFC, int(entry[2].replace(',', '')))
-            new_entries.append(record)
-            haveLoaded = True
-
-    loaded = loadActuals(new_entries)
-    if haveLoaded:
-        finalStr = "Loaded " + str(loaded["Data"]) + " records.  Includes attempted re-load of last 5 days"
-
-    logger('I', finalStr)
-    logger('I', "Latest file date found for " + ctry + " is " + datetime.datetime.strftime(latestFileDate, date_format))
-    retVal["Result"] = 1
-    retVal["Data"] = loaded
-    return retVal
-
-
-def gSyncActuals(countries):
-    date_format = "%Y-%m-%d"
-    result = latestActualDate()
-    final = "2000-01-01"
-    if result["Result"] == 1:
-        data = json.loads(result["Data"])[0]
-        if data["latest"] is not None:
-            final = data["latest"]
-
-        logger('I', "Last DB entry is " + final)
-        lastEntry = datetime.datetime.strptime(final, date_format).date()
-
-        localReturn = checkDaily(lastEntry)
-        if localReturn["Result"] == 0:
-            logger('W', '')
-            logger('W', str(localReturn["Data"]))
-            logger('W', '')
+            p_json[key][dte] = {hr: int(actual), 'Tot': int(actual), str(hr) + 'Count': 1}
     else:
-        logger('W', '')
-        logger('W', str(result["Data"]))
-        logger('W', '')
+        p_json[key] = {dte: {hr: int(actual), 'Tot': int(actual), str(hr) + 'Count': 1}}
+
+    return p_json
 
 
-def gSyncActualsOld(countries):
-    date_format = "%Y-%m-%d"
-    result = latestActualDate()
-    final = "2000-01-01"
-    if result["Result"] == 1:
-        data = json.loads(result["Data"])[0]
-        if data["latest"] is not None:
-            final = data["latest"]
+def hourNormalise(p_json):
+    retJson = {}
+    for itr in p_json:
+        for dte in p_json[itr]:
+            for entry in p_json[itr][dte]:
+                if 'Tot' not in entry and 'Count' not in entry:
+                    normsVal = p_json[itr][dte][entry] / p_json[itr][dte]['Tot']
+                    if itr in retJson:
+                        if dte in retJson[itr]:
+                            retJson[itr][dte][entry] = normsVal
+                        else:
+                            retJson[itr][dte] = {entry: normsVal}
+                    else:
+                        retJson[itr] = {dte: {entry: normsVal}}
 
-        logger('I', "Last DB entry is " + final)
-        lastEntry = datetime.datetime.strptime(final, date_format).date()
-
-        for ctry in countries:
-            localReturn = checkDaily(ctry, lastEntry)
-            if localReturn["Result"] == 0:
-                logger('W', '')
-                logger('W', str(localReturn["Data"]))
-                logger('W', '')
-                break
-    else:
-        logger('W', '')
-        logger('W', str(result["Data"]))
-        logger('W', '')
-
-
-def buildMFCLookup():
-    MFCLookup = {}
-    MFCLookup = MFCLookupWrapper("UK", MFCLookup)
-    MFCLookup = MFCLookupWrapper("FR", MFCLookup)
-    MFCLookup = MFCLookupWrapper("ES", MFCLookup)
-    return MFCLookup
-
-
-def MFCLookupWrapper(ctry, MFCLookup):
-    gData = readFrom(ctry)
-    gData = gData[1:]
-    for entry in gData:
-        MFC = entry[0]
-        if MFC not in MFCLookup:
-            MFCLookup[MFC] = ctry
-    return MFCLookup
-
-
-def loadForecastOneOff():
-    gData = readFromOld("Forecast", "!A:E")
-    gData = gData[1:]
-    new_entries = []
-    date_format = "%Y-%m-%d"
-    for entry in gData:
-        MFC = entry[0]
-        try:
-            dte = datetime.datetime.strptime(entry[1], date_format).date()
-        except:
-            dte = datetime.datetime.strptime(entry[1], "%m/%d/%Y").date()
-        fcst = int(float(entry[4].replace(',', '')))
-        record = (dte, MFC, fcst)
-        new_entries.append(record)
-
-    loadForecastWrapper(new_entries)
-    logger('I', "Loaded forecast data - " + str(len(new_entries)) + " entries.")
+    return retJson
