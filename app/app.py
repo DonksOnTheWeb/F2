@@ -43,7 +43,6 @@ def hbLogic():
 
     if proceed or proceedOverride:
         logger('I', "Performing full re-roll of hyper parameters and hourly curves")
-        #autoTune()
         weeklyForecastRoutine()
         logger('I', kick_off_at + " checks Done")
 

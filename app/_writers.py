@@ -2,7 +2,6 @@ from googleapiclient.discovery import build
 from google.oauth2 import service_account
 import datetime
 
-
 def writeParams(MFC, Params, Ctry, Number):
     SERVICE_ACCOUNT_FILE = 'keys.json'
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets']

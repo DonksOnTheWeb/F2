@@ -18,18 +18,20 @@ def weeklyForecastRoutine():
     logger("I", "Reading MFC definitions")
     definitions = readMFCDefinitions()
 
-    # Now determine maximum allowed data date.  This is *yesterday*
-    yesterday = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-    yesterday = datetime.datetime.strptime(yesterday, '%Y-%m-%d')
-    lastWeek = yesterday - datetime.timedelta(days=7)
-    logger("I", "Yesterday is :" + str(yesterday))
+    # Now determine maximum allowed data date.  This is *yesterday*  NO - SUNDAY!!
+    # yesterday = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+    # yesterday = datetime.datetime.strptime(yesterday, '%Y-%m-%d')
+
+    prevSunday = prior_Sunday()
+    lastWeek = prevSunday - datetime.timedelta(days=7)
+    logger("I", "Last Sunday is :" + str(prevSunday))
     logger("I", "Last Week is :" + str(lastWeek))
 
     # Read raw data
     logger("I", "Reading Raw Actual Data")
-    hourlyRaw = readActuals(yesterday, 'Hourly Dump (FR + UK).csv', '1TjJpezxYxcet7VTWWFm-irtugOIfe7mjymUG7XId7rM',
+    hourlyRaw = readActuals(prevSunday, 'Hourly Dump (FR + UK).csv', '1TjJpezxYxcet7VTWWFm-irtugOIfe7mjymUG7XId7rM',
                             '!A:D')
-    dailyRaw = readActuals(yesterday, 'Daily Order Dump (FR + UK) Runs Daily.csv',
+    dailyRaw = readActuals(prevSunday, 'Daily Order Dump (FR + UK) Runs Daily.csv',
                            '1_l2aPXa7Huql-3u5MXfbqLq2HpTQd0HBRM8w4b09igo', '!A:C', False)
     dailyRaw_Historic = readActuals(lastWeek, 'Daily Order Dump (FR + UK) Runs Daily.csv',
                                     '1_l2aPXa7Huql-3u5MXfbqLq2HpTQd0HBRM8w4b09igo', '!A:C', False)
@@ -38,8 +40,6 @@ def weeklyForecastRoutine():
     geoTags = definitions['GeoTags']
     opensAt = definitions['OpensAt']  ###TO-DO
     becomes = definitions['Becomes']
-
-    activeMFCs = ['CDG_Paris_1263']
 
     # Hour Curves
     logger("I", "Building Hourly Curves")
@@ -57,8 +57,6 @@ def weeklyForecastRoutine():
 
     hourlyCurves = buildHourlyCurves(cleanHours)
 
-    print(json.dumps(hourlyCurves, indent=4))
-
     writeHourly(hourlyCurves['MFCs_Hourly'], 'H Crve MFC')
     writeHourly(hourlyCurves['Regions_Hourly'], 'H Crve Rgn')
 
@@ -75,7 +73,7 @@ def weeklyForecastRoutine():
         result = False
         while not result:
             try:
-                rows = mainLoop(MFC, geoTags, becomes, hourlyRaw, dailyRaw, dailyRaw_Historic, yesterday, lastWeek,hourlyCurves, rows)
+                rows = mainLoop(MFC, geoTags, becomes, hourlyRaw, dailyRaw, dailyRaw_Historic, prevSunday, lastWeek,hourlyCurves, rows)
                 result = True
             except Exception as e:
                 logger('W', '')
@@ -101,7 +99,8 @@ def mainLoop(MFC, geoTags, becomes, hourlyRaw, dailyRaw, dailyRaw_Historic, yest
     if MFC in becomes:
         succession = becomes[MFC]
 
-    ts = parseForForecast(MFC, succession, dailyRaw)['ts']
+    parsed = parseForForecast(MFC, succession, dailyRaw)
+    ts = parsed['ts']
     ts_acc = parseForForecast(MFC, succession, dailyRaw_Historic)['ts']
 
     logger("I", "Calculating Parameters for " + MFC)
@@ -246,17 +245,14 @@ def readActuals(yesterday, sheet_Name, sheet_ID, sheet_Columns, containsHours=Tr
 
 
 def calcParams(MFC, ts, ctry, itr):
+    # How many oprders in last 7 days?
+    for entry in ts:
+        print(entry)
     logger("I", "Running " + MFC + " parameter tuning - " + datetime.datetime.now().strftime('%d-%b-%Y, %H:%M:%S'))
     prophetParams = doHPT(MFC, ts, ctry)
     logger("I", "Finished " + MFC + " parameter tuning - " + datetime.datetime.now().strftime('%d-%b-%Y, %H:%M:%S'))
     writeParams(prophetParams['MFC'], prophetParams['Best'], prophetParams['Ctry'], itr)
     return prophetParams
-
-    # Now do forecast with those params
-    # forecast_ts = doForecast(MFC, latest, ts, prophetParams['Ctry'], prophetParams['Best'])
-    # ...and the accuracy check forecast
-    # lastWeek = latest - datetime.timedelta(days=7)
-    # accuracy_ts = doForecast(MFC, lastWeek, ts_lw, prophetParams['Ctry'], prophetParams['Best'])
 
 
 def parseForForecast(MFC, succession, ts):
@@ -456,3 +452,14 @@ def createOutputsByHourDayWeek(MFC, ts, hourlyCurves):
 
     retVal = {'HD': hourlyDailyList, 'D': dailyList, 'W': weeklyList}
     return retVal
+
+
+def prior_Saturday():
+    return datetime.datetime.now() - datetime.timedelta(days=((datetime.datetime.now().isoweekday() + 1) % 7))
+
+
+def prior_Sunday():
+    # return prior_Saturday() + datetime.timedelta(days=1)
+    sundayStr = datetime.datetime.now() - datetime.timedelta(days=(datetime.datetime.now().isoweekday() % 7)).strftime('%Y-%m-%d')
+    return datetime.datetime.strptime(sundayStr, '%Y-%m-%d')
+
