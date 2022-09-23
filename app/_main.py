@@ -7,10 +7,11 @@ from _loghandler import logger
 from _prophet import doHPT, doForecast
 
 from _readers import readFromGeneric
-from _writers import writeHourly, writeParams, writeForecast, printHourlyAccuracy, printDailyAccuracy
+from _writers import writeHourly, writeParams, writeForecast
 
 
 def weeklyForecastRoutine():
+
     failSleepTime = 30
     printOffset = 0
 
@@ -18,9 +19,7 @@ def weeklyForecastRoutine():
     logger("I", "Reading MFC definitions")
     definitions = readMFCDefinitions()
 
-    # Now determine maximum allowed data date.  This is *yesterday*  NO - SUNDAY!!
-    # yesterday = (datetime.datetime.today() - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-    # yesterday = datetime.datetime.strptime(yesterday, '%Y-%m-%d')
+    # Now determine maximum allowed data date.  This SUNDAY!!
 
     prevSunday = prior_Sunday()
     lastWeek = prevSunday - datetime.timedelta(days=7)
@@ -38,7 +37,8 @@ def weeklyForecastRoutine():
 
     activeMFCs = definitions['ActiveMFCs']
     geoTags = definitions['GeoTags']
-    opensAt = definitions['OpensAt']  ###TO-DO
+    opensAt = definitions['OpensAt']
+    closesAt = definitions['ClosesAt']
     becomes = definitions['Becomes']
 
     # Hour Curves
@@ -56,6 +56,8 @@ def weeklyForecastRoutine():
         cleanHours[MFC] = {'Hours': parsedData['json'], 'GeoTag': geoTags[MFC]}
 
     hourlyCurves = buildHourlyCurves(cleanHours)
+    # Align with opening hours
+    hourlyCurves = openingAlign(hourlyCurves, opensAt, closesAt)
 
     writeHourly(hourlyCurves['MFCs_Hourly'], 'H Crve MFC')
     writeHourly(hourlyCurves['Regions_Hourly'], 'H Crve Rgn')
@@ -63,17 +65,16 @@ def weeklyForecastRoutine():
     # Now tha actual calculation loop
     logger("I", "Main Loop")
     itr = 1
-    accStartRow = {'D': 2, 'H': 2}
     outRowByCountryD = {}
     outRowByCountryHD = {}
     outRowByCountryW = {}
-    rows = {'AS': accStartRow, 'D': outRowByCountryD, 'HD': outRowByCountryHD, 'W': outRowByCountryW, 'I': itr,
-            'P': printOffset}
+    rows = {'D': outRowByCountryD, 'HD': outRowByCountryHD, 'W': outRowByCountryW, 'I': itr, 'P': printOffset}
     for MFC in activeMFCs:
         result = False
         while not result:
             try:
-                rows = mainLoop(MFC, geoTags, becomes, hourlyRaw, dailyRaw, dailyRaw_Historic, prevSunday, lastWeek,hourlyCurves, rows)
+                rows = mainLoop(MFC, geoTags, becomes, hourlyRaw, dailyRaw, dailyRaw_Historic, prevSunday, lastWeek,
+                                hourlyCurves, rows)
                 result = True
             except Exception as e:
                 logger('W', '')
@@ -87,7 +88,6 @@ def weeklyForecastRoutine():
 
 
 def mainLoop(MFC, geoTags, becomes, hourlyRaw, dailyRaw, dailyRaw_Historic, yesterday, lastWeek, hourlyCurves, rows):
-    accStartRow = rows['AS']
     outRowByCountryD = rows['D']
     outRowByCountryHD = rows['HD']
     outRowByCountryW = rows['W']
@@ -101,33 +101,12 @@ def mainLoop(MFC, geoTags, becomes, hourlyRaw, dailyRaw, dailyRaw_Historic, yest
 
     parsed = parseForForecast(MFC, succession, dailyRaw)
     ts = parsed['ts']
-    ts_acc = parseForForecast(MFC, succession, dailyRaw_Historic)['ts']
-
     logger("I", "Calculating Parameters for " + MFC)
     params = calcParams(MFC, ts, ctry, itr)
     logger("I", "Running forecasts for " + MFC)
     forecast_ts = doForecast(MFC, yesterday, ts, ctry, params['Best'])
-    accCheck_ts = doForecast(MFC, lastWeek, ts_acc, ctry, params['Best'])
-
-    print()
-    print(forecast_ts)
-    print()
-    print(accCheck_ts)
-    print()
-
-    a=1/0
 
     logger("I", "Exporting Results.")
-
-    # Print Accuracy
-    outputs = createOutputsByHourDayWeek(MFC, accCheck_ts, hourlyCurves)
-    hourlyDailyList = outputs['HD']  # forecast by HD
-    dailyList = outputs['D']  # forecast by D
-    hourlyOrders = hourlyRaw[MFC]  # orders by H.  We will use 7 days worth
-    dailyOrders = dailyRaw[MFC]  # forecast by D.  We will use 7 days worth
-
-    accStartRow['H'] = printHourlyAccuracy(MFC, ctry, hourlyDailyList, hourlyOrders, accStartRow['H'], yesterday)
-    accStartRow['D'] = printDailyAccuracy(MFC, ctry, dailyList, dailyOrders, accStartRow['D'], yesterday)
 
     # Now multiply out the forecast_ts with the day curve.  Always round up and floats.
     outputs = createOutputsByHourDayWeek(MFC, forecast_ts, hourlyCurves)
@@ -160,7 +139,7 @@ def mainLoop(MFC, geoTags, becomes, hourlyRaw, dailyRaw, dailyRaw_Historic, yest
     outRow = outRow + len(weeklyList) + printOffset
     outRowByCountryW[ctry] = outRow
 
-    rows = {'AS': accStartRow, 'D': outRowByCountryD, 'HD': outRowByCountryHD,
+    rows = {'D': outRowByCountryD, 'HD': outRowByCountryHD,
             'W': outRowByCountryW, 'I': itr, 'P': printOffset}
     return rows
 
@@ -187,6 +166,7 @@ def readMFCDefinitions():
     GeoTags = {}
     OpeningCol = {}
     Opening = {}
+    Closing = {}
     ActiveMFCs = []
     becomes = {}
     line = 0
@@ -207,14 +187,22 @@ def readMFCDefinitions():
             ActiveMFCs.append(MFC)
             GeoTags[MFC] = GeoTag
             openingHours = {}
+            closingHours = {}
             for dn in dayNames:
-                openingHours[dn] = entry[OpeningCol[dn]]
+                OpenClose = str(entry[OpeningCol[dn]])
+                ClosesAt = '00'
+                OpensAt = OpenClose.split('-')[0]
+                if '-' in OpenClose:
+                    ClosesAt = OpenClose.split('-')[1]
+                openingHours[dn] = OpensAt
+                closingHours[dn] = ClosesAt
             Opening[MFC] = openingHours
+            Closing[MFC] = closingHours
             if len(was) > 0:
                 becomes[MFC] = {'MFC': was, 'Fraction': frac}
 
     ActiveMFCs.sort()
-    return {'GeoTags': GeoTags, 'ActiveMFCs': ActiveMFCs, 'OpensAt': Opening, 'Becomes': becomes}
+    return {'GeoTags': GeoTags, 'ActiveMFCs': ActiveMFCs, 'OpensAt': Opening, 'ClosesAt': Closing, 'Becomes': becomes}
 
 
 def readActuals(yesterday, sheet_Name, sheet_ID, sheet_Columns, containsHours=True):
@@ -254,9 +242,6 @@ def readActuals(yesterday, sheet_Name, sheet_ID, sheet_Columns, containsHours=Tr
 
 
 def calcParams(MFC, ts, ctry, itr):
-    # How many oprders in last 7 days?
-    for entry in ts:
-        print(entry)
     logger("I", "Running " + MFC + " parameter tuning - " + datetime.datetime.now().strftime('%d-%b-%Y, %H:%M:%S'))
     prophetParams = doHPT(MFC, ts, ctry)
     logger("I", "Finished " + MFC + " parameter tuning - " + datetime.datetime.now().strftime('%d-%b-%Y, %H:%M:%S'))
@@ -463,12 +448,74 @@ def createOutputsByHourDayWeek(MFC, ts, hourlyCurves):
     return retVal
 
 
-def prior_Saturday():
-    return datetime.datetime.now() - datetime.timedelta(days=((datetime.datetime.now().isoweekday() + 1) % 7))
-
-
 def prior_Sunday():
-    # return prior_Saturday() + datetime.timedelta(days=1)
-    sundayStr = datetime.datetime.now() - datetime.timedelta(days=(datetime.datetime.now().isoweekday() % 7)).strftime('%Y-%m-%d')
+    sundayStr = (
+                datetime.datetime.now() - datetime.timedelta(days=(datetime.datetime.now().isoweekday() % 7))).strftime(
+        '%Y-%m-%d')
     return datetime.datetime.strptime(sundayStr, '%Y-%m-%d')
 
+
+def openingAlign(hourlyCurves, opensAt, closesAt):
+    hourlies = hourlyCurves['MFCs_Hourly']
+
+    for MFC in hourlies:
+        historic = hourlies[MFC]
+        opening = opensAt[MFC]
+        closing = closesAt[MFC]
+        alignedCurve = {}
+
+        for d in historic:
+            minSales = 1
+            for h in range(0,24):
+                h = str(h)
+                if historic[d][h] < minSales:
+                    if historic[d][h] > 0:
+                        minSales = historic[d][h]
+            openingHour = int(opening[d])
+            closingHour = int(closing[d])
+            newCurve = {}
+            total = 0
+            if openingHour < closingHour:
+                for h in range(0, openingHour):
+                    h = str(h)
+                    newCurve[h] = 0
+                for h in range(openingHour, closingHour + 1):
+                    h = str(h)
+                    newCurve[h] = min(minSales, historic[d][h])
+                    total = total + newCurve[h]
+                if closingHour < 23:
+                    for h in range(closingHour, 24):
+                        h = str(h)
+                        newCurve[h] = 0
+            else:
+                for h in range(0, closingHour):
+                    h = str(h)
+                    newCurve[h] = expectedLoad(minSales, historic[d][h])
+                    total = total + newCurve[h]
+                for h in range(closingHour, openingHour):
+                    h = str(h)
+                    newCurve[h] = 0
+                for h in range(openingHour, 24):
+                    h = str(h)
+                    newCurve[h] = expectedLoad(minSales, historic[d][h])
+                    total = total + newCurve[h]
+
+            finalCurve={}
+            for h in newCurve:
+                normed = newCurve[h]/total
+                finalCurve[h] = normed
+            alignedCurve[d] = finalCurve
+
+        hourlies[MFC] = alignedCurve
+
+    hourlyCurves['MFCs_Hourly'] = hourlies
+    return hourlyCurves
+
+
+def expectedLoad(minSales, recorded):
+    retVal = 0
+    if recorded == 0:
+        retVal = minSales
+    else:
+        retVal = recorded
+    return retVal

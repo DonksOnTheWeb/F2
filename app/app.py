@@ -1,7 +1,6 @@
 import json
 from os.path import exists
 from apscheduler.schedulers.background import BackgroundScheduler
-from _googlePull import autoTune
 
 from _main import weeklyForecastRoutine
 

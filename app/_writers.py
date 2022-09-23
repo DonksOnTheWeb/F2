@@ -2,6 +2,7 @@ from googleapiclient.discovery import build
 from google.oauth2 import service_account
 import datetime
 
+
 def writeParams(MFC, Params, Ctry, Number):
     SERVICE_ACCOUNT_FILE = 'keys.json'
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
@@ -148,110 +149,6 @@ def writeForecast(MFC, Forecast, tab, outRow, ignoreHour):
 
         sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=outRange,
                               valueInputOption='USER_ENTERED').execute()
-
-
-def printHourlyAccuracy(MFC, ctry, hourlyDailyList, hourlyOrders, stRow, latest):
-    # make forecast same format as actuals
-    transformed = {}
-    for entry in hourlyDailyList:
-        dte = entry['Date']
-        hr = entry['Hour']
-        forecast = entry['Forecast']
-        if dte in transformed:
-            transformed[dte][hr] = forecast
-        else:
-            transformed[dte] = {hr: forecast}
-
-    values = []
-    for dte in transformed:
-        if dte in hourlyOrders:
-            if datetime.datetime.strptime(dte, '%Y-%m-%d') <= latest:
-                for hr in transformed[dte]:
-                    fcst = int(transformed[dte][hr])
-                    if hr in hourlyOrders[dte]:
-                        act = int(hourlyOrders[dte][hr])
-                    else:
-                        act = 0
-                    if act > 0:
-                        values.append([MFC, ctry, dte, hr, fcst, act, abs(fcst-act)/act])
-                    else:
-                        values.append([MFC, ctry, dte, hr, fcst, act, ''])
-
-    SERVICE_ACCOUNT_FILE = 'keys.json'
-    SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    # The ID and range of a sample spreadsheet.
-    spreadsheet_id = '1GmOojxN2v0vjJKT_g3SfSv6EgLJ4eMLoKo08LlKTXFk'
-    service = build('sheets', 'v4', credentials=creds)
-    # Call the Sheets API
-    sheet = service.spreadsheets()
-
-    # Clear existing if first run
-    if stRow == 2:
-        clearRange = "Acc H!A:G"
-        sheet.values().clear(spreadsheetId=spreadsheet_id, range=clearRange).execute()
-        # Print the headers
-        data = {'values': [['Location', 'Ctry', 'Date', 'Hour', 'Forecast', 'Actual', 'Abs Acc as % of Act']]}
-        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range="Acc H!A1:G1",
-                              valueInputOption='USER_ENTERED').execute()
-
-    # Now write out vals
-    outRange = "Acc H!A" + str(stRow) + ":G" + str(len(values) + stRow)
-    tryGrowSheet(sheet, "Acc H", spreadsheet_id, stRow + len(values))
-    data = {'values': values}
-    sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=outRange,
-                          valueInputOption='USER_ENTERED').execute()
-
-    return len(values) + stRow + 2
-
-
-def printDailyAccuracy(MFC, ctry, dailyList, dailyOrders, stRow, latest):
-    # make forecast same format as actuals
-    transformed = {}
-    for entry in dailyList:
-        dte = entry['Date']
-        forecast = entry['Forecast']
-        transformed[dte] = forecast
-
-    values = []
-    for dte in transformed:
-        fcst = int(transformed[dte])
-        if dte in dailyOrders:
-            if datetime.datetime.strptime(dte, '%Y-%m-%d') <= latest:
-                act = int(dailyOrders[dte]['10'])
-                if act > 0:
-                    values.append([MFC, ctry, dte, fcst, act, abs(fcst - act) / act])
-                else:
-                    values.append([MFC, ctry, dte, fcst, act, ''])
-
-
-
-    SERVICE_ACCOUNT_FILE = 'keys.json'
-    SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    # The ID and range of a sample spreadsheet.
-    spreadsheet_id = '1GmOojxN2v0vjJKT_g3SfSv6EgLJ4eMLoKo08LlKTXFk'
-    service = build('sheets', 'v4', credentials=creds)
-    # Call the Sheets API
-    sheet = service.spreadsheets()
-
-    # Clear existing if first run
-    if stRow == 2:
-        clearRange = "Acc D!A:F"
-        sheet.values().clear(spreadsheetId=spreadsheet_id, range=clearRange).execute()
-        # Print the headers
-        data = {'values': [['Location', 'Ctry', 'Date', 'Forecast', 'Actual', 'Abs Acc as % of Act']]}
-        sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range="Acc D!A1:F1",
-                              valueInputOption='USER_ENTERED').execute()
-
-    # Now write out vals
-    outRange = "Acc D!A" + str(stRow) + ":F" + str(len(values) + stRow)
-    tryGrowSheet(sheet, "Acc D", spreadsheet_id, stRow + len(values))
-    data = {'values': values}
-    sheet.values().update(spreadsheetId=spreadsheet_id, body=data, range=outRange,
-                          valueInputOption='USER_ENTERED').execute()
-
-    return len(values) + stRow + 2
 
 
 def tryGrowSheet(sheet, sheetName, spreadsheet_id, endR):
