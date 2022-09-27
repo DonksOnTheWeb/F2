@@ -45,9 +45,9 @@ def hbLogic():
         weeklyForecastRoutine()
         logger('I', kick_off_at + " checks Done")
 
-    data['lastDate'] = today
-    with open('heartbeat.json', 'w') as f:
-        json.dump(data, f)
+        data['lastDate'] = today
+        with open('heartbeat.json', 'w') as f:
+            json.dump(data, f)
 
 
 logger('I', "Application is now awake.")

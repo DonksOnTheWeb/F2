@@ -53,7 +53,7 @@ def doHPT(MFC, history_json, ctry=None):
     param_grid = {
         'uncertainty_samples': [0],
         'changepoint_prior_scale': [0.001, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60],
-        'changepoint_range': [0.8, 0.9],
+        'changepoint_range': [0.8, 0.9, 1.0],
         'seasonality_mode': ['additive', 'multiplicative']
     }
 

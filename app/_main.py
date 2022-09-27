@@ -1,7 +1,7 @@
 import math
 import datetime
 import time
-import json
+import traceback
 
 from _loghandler import logger
 from _prophet import doHPT, doForecast
@@ -27,13 +27,16 @@ def weeklyForecastRoutine():
     logger("I", "Last Week is :" + str(lastWeek))
 
     # Read raw data
+    hourlyRaw = {}
+    dailyRaw = {}
     logger("I", "Reading Raw Actual Data")
-    hourlyRaw = readActuals(prevSunday, 'Hourly Dump (FR + UK).csv', '1TjJpezxYxcet7VTWWFm-irtugOIfe7mjymUG7XId7rM',
-                            '!A:D')
-    dailyRaw = readActuals(prevSunday, 'Daily Order Dump (FR + UK) Runs Daily.csv',
-                           '1_l2aPXa7Huql-3u5MXfbqLq2HpTQd0HBRM8w4b09igo', '!A:C', False)
-    dailyRaw_Historic = readActuals(lastWeek, 'Daily Order Dump (FR + UK) Runs Daily.csv',
-                                    '1_l2aPXa7Huql-3u5MXfbqLq2HpTQd0HBRM8w4b09igo', '!A:C', False)
+    # UK...
+    hourlyRaw = readActuals(hourlyRaw, prevSunday, 'Hourly', '1IhJri7h4ElPCO-Mi-9KqpEhzESWJTGd6yyz2eR5L_6M', '!A:D')
+    dailyRaw = readActuals(dailyRaw, prevSunday, 'Daily', '1Amw7-7UxM42aUBdcQ1Ko_viYX3GTX6KlGDFsa0rEswU', '!A:C', False)
+
+    # FR...
+    hourlyRaw = readActuals(hourlyRaw, prevSunday, 'Hourly', '1Fj_Hf8O_fI9DYKTEQPFKevCE1kRAh0PvoVWYVU6_SPE', '!A:D')
+    dailyRaw = readActuals(dailyRaw, prevSunday, 'Daily', '1SKbNSJJOCgzNBX6eKUrmmOM67A-5iLPZBG5lHHrRoeA', '!A:C', False)
 
     activeMFCs = definitions['ActiveMFCs']
     geoTags = definitions['GeoTags']
@@ -73,12 +76,12 @@ def weeklyForecastRoutine():
         result = False
         while not result:
             try:
-                rows = mainLoop(MFC, geoTags, becomes, hourlyRaw, dailyRaw, dailyRaw_Historic, prevSunday, lastWeek,
-                                hourlyCurves, rows)
+                rows = mainLoop(MFC, geoTags, becomes, dailyRaw, prevSunday, hourlyCurves, rows)
                 result = True
             except Exception as e:
                 logger('W', '')
                 logger('W', repr(e))
+                logger('W', traceback.format_exc())
                 logger('W', MFC + ' Failed.  Sleeping ' + str(failSleepTime) + '...')
                 time.sleep(failSleepTime)
                 logger('I', 'Trying ' + MFC + ' again')
@@ -87,7 +90,7 @@ def weeklyForecastRoutine():
         rows['I'] = itr
 
 
-def mainLoop(MFC, geoTags, becomes, hourlyRaw, dailyRaw, dailyRaw_Historic, yesterday, lastWeek, hourlyCurves, rows):
+def mainLoop(MFC, geoTags, becomes, dailyRaw, yesterday, hourlyCurves, rows):
     outRowByCountryD = rows['D']
     outRowByCountryHD = rows['HD']
     outRowByCountryW = rows['W']
@@ -205,11 +208,10 @@ def readMFCDefinitions():
     return {'GeoTags': GeoTags, 'ActiveMFCs': ActiveMFCs, 'OpensAt': Opening, 'ClosesAt': Closing, 'Becomes': becomes}
 
 
-def readActuals(yesterday, sheet_Name, sheet_ID, sheet_Columns, containsHours=True):
+def readActuals(retJson, yesterday, sheet_Name, sheet_ID, sheet_Columns, containsHours=True):
     # hourlyOrders = readFromGeneric('Hourly Dump (FR + UK).csv','1TjJpezxYxcet7VTWWFm-irtugOIfe7mjymUG7XId7rM', '!A:D')
     actuals = readFromGeneric(sheet_Name, sheet_ID, sheet_Columns)
     actuals = actuals[1:]
-    retJson = {}
     earliest = None
     latest = None
     for entry in actuals:
@@ -274,6 +276,8 @@ def parseForForecast(MFC, succession, ts):
                         tsJson[dte] = {hr: historic}
 
     badMFC = []
+    out_ts = []
+    out_json = {}
     if MFC in ts:
         for dte in ts[MFC]:
             dates = dteBookEnds(earliest, latest, dte)
@@ -288,32 +292,32 @@ def parseForForecast(MFC, succession, ts):
                         tsJson[dte][hr] = historic
                 else:
                     tsJson[dte] = {hr: historic}
+
+        earliest = datetime.datetime.strptime(earliest, '%Y-%m-%d')
+        latest = datetime.datetime.strptime(latest, '%Y-%m-%d')
+
+        delta = datetime.timedelta(days=1)
+        while earliest <= latest:
+            dte = earliest.strftime('%Y-%m-%d')
+            if dte in tsJson:
+                for hr in range(0, 24):
+                    actual = 0
+                    hr = str(hr)
+                    if hr in tsJson[dte]:
+                        actual = tsJson[dte][hr]
+                        # out_ts.append({"ds": dte, "hr": hr, "y": actual})
+                        out_ts.append({"ds": dte, "y": actual})
+                    if dte in out_json:
+                        out_json[dte][hr] = actual
+                    else:
+                        out_json[dte] = {hr: actual}
+
+            earliest += delta
+
     else:
         logger("I", MFC + " not in raw TS data.  Needs to be removed.")
         badMFC.append(MFC)
 
-    earliest = datetime.datetime.strptime(earliest, '%Y-%m-%d')
-    latest = datetime.datetime.strptime(latest, '%Y-%m-%d')
-
-    out_ts = []
-    out_json = {}
-    delta = datetime.timedelta(days=1)
-    while earliest <= latest:
-        dte = earliest.strftime('%Y-%m-%d')
-        if dte in tsJson:
-            for hr in range(0, 24):
-                actual = 0
-                hr = str(hr)
-                if hr in tsJson[dte]:
-                    actual = tsJson[dte][hr]
-                    # out_ts.append({"ds": dte, "hr": hr, "y": actual})
-                    out_ts.append({"ds": dte, "y": actual})
-                if dte in out_json:
-                    out_json[dte][hr] = actual
-                else:
-                    out_json[dte] = {hr: actual}
-
-        earliest += delta
     return {'ts': out_ts, 'json': out_json, 'bad': badMFC}
 
 
