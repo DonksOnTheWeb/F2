@@ -109,7 +109,6 @@ def doForecast(MFC, latest, history_json, ctry, paramString, userHolidays):
     pd_hols = buildUserHolidays(userHolidays[MFC])
     if len(pd_hols) > 0:
         paramString = paramString.replace(')', ', holidays=pd_hols)')
-    print(paramString)
     df = pd.json_normalize(history_json)
     prophetString = "Prophet" + paramString
     m = eval(prophetString)
