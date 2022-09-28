@@ -15,6 +15,7 @@ def readFromGeneric(sheet_name, sheet_id, cols):
 
     # Call the Sheets API
     sheet = service.spreadsheets()
+
     result = sheet.values().get(spreadsheetId=sheet_id, range=sheet_name + cols).execute()
     values = result.get('values', [])
 

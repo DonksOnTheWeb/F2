@@ -47,7 +47,24 @@ class suppress_stdout_stderr(object):
         os.close(self.null_fds[1])
 
 
-def doHPT(MFC, history_json, ctry=None):
+def buildUserHolidays(holJson):
+    appendList = []
+    for hType in holJson:
+        data = pd.DataFrame({
+            'holiday': hType,
+            'ds': pd.to_datetime(holJson[hType])
+        })
+        appendList.append(data)
+
+    if len(appendList) > 0:
+        appendList = pd.concat(appendList)
+
+    return appendList
+
+
+def doHPT(MFC, history_json, userHolidays, ctry=None):
+
+    pd_hols = buildUserHolidays(userHolidays[MFC])
     df = pd.json_normalize(history_json)
 
     param_grid = {
@@ -65,7 +82,10 @@ def doHPT(MFC, history_json, ctry=None):
     iteration = 0
     for params in all_params:
         iteration = iteration + 1
-        m = Prophet(**params)
+        if len(pd_hols) > 0:
+            m = Prophet(**params, holidays=pd_hols)
+        else:
+            m = Prophet(**params)
         m.add_country_holidays(ctry)
         with suppress_stdout_stderr():
             m.fit(df)
@@ -85,7 +105,11 @@ def doHPT(MFC, history_json, ctry=None):
     return retVal
 
 
-def doForecast(MFC, latest, history_json, ctry, paramString):
+def doForecast(MFC, latest, history_json, ctry, paramString, userHolidays):
+    pd_hols = buildUserHolidays(userHolidays[MFC])
+    if len(pd_hols) > 0:
+        paramString = paramString.replace(')', ', holidays=pd_hols)')
+    print(paramString)
     df = pd.json_normalize(history_json)
     prophetString = "Prophet" + paramString
     m = eval(prophetString)

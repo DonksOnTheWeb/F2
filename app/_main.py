@@ -18,6 +18,8 @@ def weeklyForecastRoutine():
     # First read all live MFCs
     logger("I", "Reading MFC definitions")
     definitions = readMFCDefinitions()
+    logger("I", "Reading Calendar")
+    userHolidays = readUserHolidays()
 
     # Now determine maximum allowed data date.  This SUNDAY!!
 
@@ -76,7 +78,7 @@ def weeklyForecastRoutine():
         result = False
         while not result:
             try:
-                rows = mainLoop(MFC, geoTags, becomes, dailyRaw, prevSunday, hourlyCurves, rows)
+                rows = mainLoop(MFC, geoTags, becomes, dailyRaw, prevSunday, hourlyCurves, rows, userHolidays)
                 result = True
             except Exception as e:
                 logger('W', '')
@@ -90,7 +92,7 @@ def weeklyForecastRoutine():
         rows['I'] = itr
 
 
-def mainLoop(MFC, geoTags, becomes, dailyRaw, yesterday, hourlyCurves, rows):
+def mainLoop(MFC, geoTags, becomes, dailyRaw, yesterday, hourlyCurves, rows, userHolidays):
     outRowByCountryD = rows['D']
     outRowByCountryHD = rows['HD']
     outRowByCountryW = rows['W']
@@ -105,10 +107,9 @@ def mainLoop(MFC, geoTags, becomes, dailyRaw, yesterday, hourlyCurves, rows):
     parsed = parseForForecast(MFC, succession, dailyRaw)
     ts = parsed['ts']
     logger("I", "Calculating Parameters for " + MFC)
-    params = calcParams(MFC, ts, ctry, itr)
+    params = calcParams(MFC, ts, ctry, itr, userHolidays)
     logger("I", "Running forecasts for " + MFC)
-    forecast_ts = doForecast(MFC, yesterday, ts, ctry, params['Best'])
-
+    forecast_ts = doForecast(MFC, yesterday, ts, ctry, params['Best'], userHolidays)
     logger("I", "Exporting Results.")
 
     # Now multiply out the forecast_ts with the day curve.  Always round up and floats.
@@ -208,6 +209,35 @@ def readMFCDefinitions():
     return {'GeoTags': GeoTags, 'ActiveMFCs': ActiveMFCs, 'OpensAt': Opening, 'ClosesAt': Closing, 'Becomes': becomes}
 
 
+def readUserHolidays():
+    hols = readFromGeneric('Calendar', '1GmOojxN2v0vjJKT_g3SfSv6EgLJ4eMLoKo08LlKTXFk', '!A:ZZ')
+    itr = 0
+    holJson = {}
+    lookUp = {}
+    for entry in hols:
+        if itr == 0:
+            for mfc in entry:
+                if len(mfc) > 0:
+                    holJson[mfc] = {}
+                    lookUp[itr] = mfc
+                itr = itr + 1
+        else:
+            dte = entry[0]
+            dte = datetime.datetime.strptime(dte, '%d-%b-%Y')
+            yyyymmdd = dte.strftime('%Y-%m-%d')
+            for i in range(1, len(entry)):
+                if len(entry[i]) > 0:
+                    holIdents = entry[i].split(',')
+                    mfc = lookUp[i]
+                    for h_type in holIdents:
+                        if h_type in holJson[mfc]:
+                            holJson[mfc][h_type].append(yyyymmdd)
+                        else:
+                            holJson[mfc][h_type] = [yyyymmdd]
+
+    return holJson
+
+
 def readActuals(retJson, yesterday, sheet_Name, sheet_ID, sheet_Columns, containsHours=True):
     # hourlyOrders = readFromGeneric('Hourly Dump (FR + UK).csv','1TjJpezxYxcet7VTWWFm-irtugOIfe7mjymUG7XId7rM', '!A:D')
     actuals = readFromGeneric(sheet_Name, sheet_ID, sheet_Columns)
@@ -243,9 +273,9 @@ def readActuals(retJson, yesterday, sheet_Name, sheet_ID, sheet_Columns, contain
     return retJson
 
 
-def calcParams(MFC, ts, ctry, itr):
+def calcParams(MFC, ts, ctry, itr, userHolidays):
     logger("I", "Running " + MFC + " parameter tuning - " + datetime.datetime.now().strftime('%d-%b-%Y, %H:%M:%S'))
-    prophetParams = doHPT(MFC, ts, ctry)
+    prophetParams = doHPT(MFC, ts, userHolidays, ctry)
     logger("I", "Finished " + MFC + " parameter tuning - " + datetime.datetime.now().strftime('%d-%b-%Y, %H:%M:%S'))
     writeParams(prophetParams['MFC'], prophetParams['Best'], prophetParams['Ctry'], itr)
     return prophetParams
@@ -305,7 +335,6 @@ def parseForForecast(MFC, succession, ts):
                     hr = str(hr)
                     if hr in tsJson[dte]:
                         actual = tsJson[dte][hr]
-                        # out_ts.append({"ds": dte, "hr": hr, "y": actual})
                         out_ts.append({"ds": dte, "y": actual})
                     if dte in out_json:
                         out_json[dte][hr] = actual
