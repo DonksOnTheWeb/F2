@@ -69,8 +69,10 @@ def doHPT(MFC, history_json, userHolidays, ctry=None):
 
     param_grid = {
         'uncertainty_samples': [0],
+        #'changepoint_prior_scale': [0.001, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60],
         'changepoint_prior_scale': [0.001, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60],
-        'changepoint_range': [0.8, 0.9, 1.0],
+        #'changepoint_range': [0.8, 0.9, 1.0],
+        'changepoint_range': [0.8, 0.9],
         'seasonality_mode': ['additive', 'multiplicative']
     }
 
@@ -86,9 +88,12 @@ def doHPT(MFC, history_json, userHolidays, ctry=None):
             m = Prophet(**params, holidays=pd_hols)
         else:
             m = Prophet(**params)
+
         m.add_country_holidays(ctry)
+
         with suppress_stdout_stderr():
             m.fit(df)
+
             df_cv = cross_validation(m, initial=str(training) + ' days', period='7 days', horizon='7 days',
                                      parallel="processes")
             df_p = performance_metrics(df_cv, rolling_window=1)
@@ -112,7 +117,9 @@ def doForecast(MFC, latest, history_json, ctry, paramString, userHolidays):
     df = pd.json_normalize(history_json)
     prophetString = "Prophet" + paramString
     m = eval(prophetString)
-    m.add_country_holidays(country_name=ctry)
+
+    m.add_country_holidays(ctry)
+
     with suppress_stdout_stderr():
         m.fit(df)
     future = m.make_future_dataframe(182)

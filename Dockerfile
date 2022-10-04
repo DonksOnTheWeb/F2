@@ -6,7 +6,8 @@ RUN conda install -c "conda-forge/label/cf202003" pystan
 
 RUN pip3 install --upgrade --no-cache-dir numpy
 RUN pip3 install --upgrade --no-cache-dir pandas
-RUN pip3 install --upgrade --no-cache-dir Cython
+#RUN pip3 install --upgrade --no-cache-dir Cython
+RUN pip3 install --upgrade --no-cache-dir holidays==0.13
 RUN pip3 install --upgrade --no-cache-dir pystan==2.19.1.1
 RUN pip3 install --upgrade --no-cache-dir prophet
 #RUN pip3 install --upgrade --no-cache-dir Flask
