@@ -41,6 +41,7 @@ def weeklyForecastRoutine():
     dailyRaw = readActuals(dailyRaw, prevSunday, 'Daily', '1SKbNSJJOCgzNBX6eKUrmmOM67A-5iLPZBG5lHHrRoeA', '!A:C', False)
 
     activeMFCs = definitions['ActiveMFCs']
+
     geoTags = definitions['GeoTags']
     opensAt = definitions['OpensAt']
     closesAt = definitions['ClosesAt']
@@ -74,11 +75,15 @@ def weeklyForecastRoutine():
     outRowByCountryHD = {}
     outRowByCountryW = {}
     rows = {'D': outRowByCountryD, 'HD': outRowByCountryHD, 'W': outRowByCountryW, 'I': itr, 'P': printOffset}
+    totMFCs = len(activeMFCs)
+    mfcCount = 1
     for MFC in activeMFCs:
         result = False
         while not result:
             try:
+                logger('I', str(mfcCount) + ' of ' + str(totMFCs))
                 rows = mainLoop(MFC, geoTags, becomes, dailyRaw, prevSunday, hourlyCurves, rows, userHolidays)
+                mfcCount = mfcCount + 1
                 result = True
             except Exception as e:
                 logger('W', '')
